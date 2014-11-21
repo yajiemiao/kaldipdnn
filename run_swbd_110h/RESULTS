@@ -1,0 +1,31 @@
+#!/bin/bash
+
+# exp/tri4a : the SAT model
+%WER 25.1 | 1831 21395 | 77.5 15.5 7.0 2.6 25.1 62.8 | exp/tri4a/decode_eval2000_sw1_tg/score_16/eval2000.ctm.swbd.filt.sys
+%WER 32.7 | 4459 42989 | 70.9 20.7 8.5 3.5 32.7 69.1 | exp/tri4a/decode_eval2000_sw1_tg/score_14/eval2000.ctm.filt.sys
+
+# results of pdnn systems
+
+# run-dnn.sh
+%WER 19.2 | 1831 21395 | 83.0 11.5 5.5 2.2 19.2 57.8 | exp_pdnn_110h/dnn/decode_eval2000_sw1_tg/score_10/eval2000.ctm.swbd.filt.sys
+%WER 25.6 | 4459 42989 | 77.2 15.8 7.0 2.8 25.6 63.2 | exp_pdnn_110h/dnn/decode_eval2000_sw1_tg/score_10/eval2000.ctm.filt.sys
+
+# run-bnf-tandem.sh
+%WER 18.7 | 1831 21395 | 83.0 11.2 5.7 1.8 18.7 56.8 | exp_pdnn_110h/bnf_tandem/tri5a/decode_eval2000_sw1_tg/score_29/eval2000.ctm.swbd.filt.sys
+%WER 25.5 | 4459 42989 | 76.9 15.5 7.6 2.4 25.5 62.9 | exp_pdnn_110h/bnf_tandem/tri5a/decode_eval2000_sw1_tg/score_27/eval2000.ctm.filt.sys
+
+%WER 18.1 | 1831 21395 | 83.5 10.9 5.6 1.6 18.1 55.3 | exp_pdnn_110h/bnf_tandem/tri5a_mmi_b0.1/decode_eval2000_sw1_tg_it1/score_27/eval2000.ctm.swbd.filt.sys
+%WER 18.0 | 1831 21395 | 83.5 10.8 5.6 1.6 18.0 55.3 | exp_pdnn_110h/bnf_tandem/tri5a_mmi_b0.1/decode_eval2000_sw1_tg_it2/score_26/eval2000.ctm.swbd.filt.sys
+%WER 18.0 | 1831 21395 | 83.6 10.7 5.7 1.6 18.0 55.5 | exp_pdnn_110h/bnf_tandem/tri5a_mmi_b0.1/decode_eval2000_sw1_tg_it3/score_26/eval2000.ctm.swbd.filt.sys
+%WER 25.1 | 4459 42989 | 77.1 14.9 8.1 2.1 25.1 62.4 | exp_pdnn_110h/bnf_tandem/tri5a_mmi_b0.1/decode_eval2000_sw1_tg_it1/score_26/eval2000.ctm.filt.sys
+%WER 25.0 | 4459 42989 | 77.0 14.6 8.5 2.0 25.0 62.4 | exp_pdnn_110h/bnf_tandem/tri5a_mmi_b0.1/decode_eval2000_sw1_tg_it2/score_26/eval2000.ctm.filt.sys
+%WER 25.2 | 4459 42989 | 76.8 14.4 8.8 2.0 25.2 62.5 | exp_pdnn_110h/bnf_tandem/tri5a_mmi_b0.1/decode_eval2000_sw1_tg_it3/score_26/eval2000.ctm.filt.sys
+
+# run-dnn-fbank.sh
+%WER 21.7 | 1831 21395 | 80.8 13.2 6.0 2.5 21.7 60.0 | exp_pdnn_110h/dnn_fbank/decode_eval2000_sw1_tg/score_10/eval2000.ctm.swbd.filt.sys
+%WER 28.2 | 4459 42989 | 74.7 17.4 8.0 2.9 28.2 65.2 | exp_pdnn_110h/dnn_fbank/decode_eval2000_sw1_tg/score_10/eval2000.ctm.filt.sys
+
+# run-cnn.sh. It outperforms run-dnn-fbank (which uses the same feature type), but still it's behind run-dnn
+%WER 19.6 | 1831 21395 | 82.2 11.8 5.9 1.8 19.6 57.3 | exp_pdnn_110h/cnn/decode_eval2000_sw1_tg/score_11/eval2000.ctm.swbd.filt.sys
+%WER 26.3 | 4459 42989 | 76.3 16.2 7.5 2.6 26.3 63.8 | exp_pdnn_110h/cnn/decode_eval2000_sw1_tg/score_10/eval2000.ctm.filt.sys
+

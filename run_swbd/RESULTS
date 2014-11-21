@@ -1,0 +1,27 @@
+#!/bin/bash
+
+# exp/tri4b : the SAT model
+%WER 22.6 | 1831 21395 | 79.9 13.9 6.3 2.5 22.6 60.5 | exp/tri4b/decode_eval2000_sw1_tg/score_16/eval2000.ctm.swbd.filt.sys
+%WER 30.2 | 4459 42989 | 73.4 18.9 7.6 3.6 30.2 66.8 | exp/tri4b/decode_eval2000_sw1_tg/score_14/eval2000.ctm.filt.sys
+
+# results of pdnn systems
+
+# run-dnn.sh
+%WER 15.4 | 1831 21395 | 86.2 8.9 4.8 1.7 15.4 52.7 | exp_pdnn/dnn/decode_eval2000_sw1_tg/score_12/eval2000.ctm.swbd.filt.sys
+%WER 21.4 | 4459 42989 | 81.0 12.9 6.1 2.4 21.4 58.8 | exp_pdnn/dnn/decode_eval2000_sw1_tg/score_11/eval2000.ctm.filt.sys
+
+# run-bnf-tandem.sh
+%WER 15.9 | 1831 21395 | 85.7 9.5 4.8 1.6 15.9 53.7 | exp_pdnn/bnf_tandem/tri5a/decode_eval2000_sw1_tg/score_31/eval2000.ctm.swbd.filt.sys
+%WER 22.5 | 4459 42989 | 79.9 13.7 6.4 2.5 22.5 60.9 | exp_pdnn/bnf_tandem/tri5a/decode_eval2000_sw1_tg/score_27/eval2000.ctm.filt.sys
+
+%WER 15.3 | 1831 21395 | 86.4 9.3 4.3 1.7 15.3 52.1 | exp_pdnn/bnf_tandem/tri5a_mmi_b0.1/decode_eval2000_sw1_tg_it1/score_24/eval2000.ctm.swbd.filt.sys
+%WER 15.1 | 1831 21395 | 86.5 9.2 4.4 1.6 15.1 52.3 | exp_pdnn/bnf_tandem/tri5a_mmi_b0.1/decode_eval2000_sw1_tg_it2/score_24/eval2000.ctm.swbd.filt.sys
+%WER 15.0 | 1831 21395 | 86.4 8.9 4.7 1.5 15.0 52.3 | exp_pdnn/bnf_tandem/tri5a_mmi_b0.1/decode_eval2000_sw1_tg_it3/score_26/eval2000.ctm.swbd.filt.sys
+%WER 15.2 | 1831 21395 | 86.5 9.1 4.5 1.6 15.2 52.9 | exp_pdnn/bnf_tandem/tri5a_mmi_b0.1/decode_eval2000_sw1_tg_it4/score_24/eval2000.ctm.swbd.filt.sys
+%WER 21.8 | 4459 42989 | 80.6 13.1 6.3 2.3 21.8 59.7 | exp_pdnn/bnf_tandem/tri5a_mmi_b0.1/decode_eval2000_sw1_tg_it1/score_24/eval2000.ctm.filt.sys
+%WER 21.7 | 4459 42989 | 80.5 12.9 6.6 2.2 21.7 59.9 | exp_pdnn/bnf_tandem/tri5a_mmi_b0.1/decode_eval2000_sw1_tg_it2/score_24/eval2000.ctm.filt.sys
+%WER 21.7 | 4459 42989 | 80.4 12.7 6.9 2.1 21.7 59.9 | exp_pdnn/bnf_tandem/tri5a_mmi_b0.1/decode_eval2000_sw1_tg_it3/score_24/eval2000.ctm.filt.sys
+%WER 21.9 | 4459 42989 | 80.2 12.6 7.2 2.1 21.9 60.4 | exp_pdnn/bnf_tandem/tri5a_mmi_b0.1/decode_eval2000_sw1_tg_it4/score_24/eval2000.ctm.filt.sys
+
+
+# run-dnn-fbank.sh

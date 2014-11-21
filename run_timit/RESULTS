@@ -1,0 +1,58 @@
+#!/bin/bash
+
+# --------------------------------------------------------------------------------------------------------------
+# run-dnn.sh : DNN Models over fMLLR features
+# -------------------------------------------------------------------------------------------------------------- 
+# pre-training with SdA
+%WER 19.2 | 400 15057 | 83.8 11.6 4.7 3.0 19.2 99.8 | -0.959 | exp_pdnn/dnn/decode_dev/score_4/ctm_39phn.filt.sys
+%WER 20.5 | 192 7215 | 81.4 12.5 6.0 2.0 20.5 100.0 | -0.279 | exp_pdnn/dnn/decode_test/score_6/ctm_39phn.filt.sys
+# with dropout
+%WER 18.5 | 400 15057 | 83.9 11.4 4.7 2.5 18.5 99.3 | -0.742 | exp_pdnn/dnn_dropout/decode_dev/score_5/ctm_39phn.filt.sys
+%WER 19.8 | 192 7215 | 83.2 12.0 4.8 3.0 19.8 99.5 | -1.099 | exp_pdnn/dnn_dropout/decode_test/score_4/ctm_39phn.filt.sys
+# pre-training with RBM
+%WER 18.8 | 400 15057 | 83.4 11.4 5.1 2.3 18.8 99.8 | -0.592 | exp_pdnn/dnn_rbm/decode_dev/score_5/ctm_39phn.filt.sys
+%WER 20.2 | 192 7215 | 82.9 11.9 5.2 3.1 20.2 100.0 | -0.917 | exp_pdnn/dnn_rbm/decode_test/score_4/ctm_39phn.filt.sys
+
+# --------------------------------------------------------------------------------------------------------------
+# run-dnn-maxout.sh : Deep Maxout Networks over fMLLR features
+# --------------------------------------------------------------------------------------------------------------
+%WER 17.5 | 400 15057 | 85.0 10.8 4.2 2.4 17.5 99.8 | -0.859 | exp_pdnn/dnn_maxout/decode_dev/score_5/ctm_39phn.filt.sys
+%WER 19.0 | 192 7215 | 83.4 11.9 4.7 2.4 19.0 99.5 | -0.894 | exp_pdnn/dnn_maxout/decode_test/score_5/ctm_39phn.filt.sys
+# with dropout
+%WER 16.7 | 400 15057 | 85.1 10.3 4.5 1.9 16.7 99.3 | -0.515 | exp_pdnn/dnn_maxout+dropout/decode_dev/score_7/ctm_39phn.filt.sys
+%WER 18.0 | 192 7215 | 84.5 11.1 4.3 2.5 18.0 99.0 | -1.070 | exp_pdnn/dnn_maxout+dropout/decode_test/score_5/ctm_39phn.filt.sys
+# with dropout lr=0.08
+%WER 16.8 | 400 15057 | 85.5 10.5 4.0 2.3 16.8 99.0 | -0.922 | exp_pdnn/dnn_maxout+dropout/decode_dev/score_5/ctm_39phn.filt.sys
+%WER 18.4 | 192 7215 | 84.5 11.4 4.0 2.9 18.4 99.0 | -1.412 | exp_pdnn/dnn_maxout+dropout/decode_test/score_4/ctm_39phn.filt.sys
+# with dropout lr=0.06
+%WER 17.0 | 400 15057 | 85.3 10.6 4.1 2.3 17.0 98.8 | -0.896 | exp_pdnn/dnn_maxout+dropout_V2/decode_dev/score_5/ctm_39phn.filt.sys
+%WER 18.9 | 192 7215 | 84.0 11.8 4.2 2.8 18.9 99.5 | -1.413 | exp_pdnn/dnn_maxout+dropout_V2/decode_test/score_4/ctm_39phn.filt.sys
+
+# run-bnf-tandem.sh
+# GMM
+%WER 21.62 [ 3255 / 15057, 451 ins, 943 del, 1861 sub ] exp_pdnn/bnf_tandem/tri4/decode_dev/wer_7
+%WER 22.19 [ 1601 / 7215, 207 ins, 464 del, 930 sub ] exp_pdnn/bnf_tandem/tri4/decode_test/wer_7
+# bMMI
+%WER 21.23 [ 3197 / 15057, 474 ins, 879 del, 1844 sub ] exp_pdnn/bnf_tandem/tri4_mmi_b0.1/decode_dev_it1/wer_7
+%WER 21.17 [ 3188 / 15057, 488 ins, 850 del, 1850 sub ] exp_pdnn/bnf_tandem/tri4_mmi_b0.1/decode_dev_it2/wer_7
+%WER 21.27 [ 3202 / 15057, 480 ins, 867 del, 1855 sub ] exp_pdnn/bnf_tandem/tri4_mmi_b0.1/decode_dev_it3/wer_8
+%WER 21.21 [ 3193 / 15057, 486 ins, 854 del, 1853 sub ] exp_pdnn/bnf_tandem/tri4_mmi_b0.1/decode_dev_it4/wer_8
+%WER 22.08 [ 1593 / 7215, 196 ins, 470 del, 927 sub ] exp_pdnn/bnf_tandem/tri4_mmi_b0.1/decode_test_it1/wer_8
+%WER 22.31 [ 1610 / 7215, 217 ins, 454 del, 939 sub ] exp_pdnn/bnf_tandem/tri4_mmi_b0.1/decode_test_it2/wer_8
+%WER 22.54 [ 1626 / 7215, 234 ins, 440 del, 952 sub ] exp_pdnn/bnf_tandem/tri4_mmi_b0.1/decode_test_it3/wer_8
+%WER 22.56 [ 1628 / 7215, 227 ins, 455 del, 946 sub ] exp_pdnn/bnf_tandem/tri4_mmi_b0.1/decode_test_it4/wer_9
+# SGMM
+%WER 20.50 [ 3086 / 15057, 332 ins, 985 del, 1769 sub ] exp_pdnn/bnf_tandem/sgmm5a/decode_dev/wer_6
+%WER 22.13 [ 1597 / 7215, 181 ins, 512 del, 904 sub ] exp_pdnn/bnf_tandem/sgmm5a/decode_test/wer_6
+
+
+# run-dnn-fbank.sh
+%WER 24.90 [ 3749 / 15057, 470 ins, 1072 del, 2207 sub ] exp_pdnn/dnn_fbank/decode_dev/wer_3
+%WER 26.47 [ 1910 / 7215, 300 ins, 473 del, 1137 sub ] exp_pdnn/dnn_fbank/decode_test/wer_2
+
+# run-cnn.sh. This is the fast version of CNN, with "--use-fast true". This version achieves a 2.4x speed up, 
+# while at the same time giving comparable dev and better test WER% compared with the old version.
+# You can switch to the old version simply by eliminating "--use-fast true"
+%WER 21.69 [ 3266 / 15057, 367 ins, 1020 del, 1879 sub ] exp_pdnn/cnn/decode_dev/wer_2
+%WER 22.41 [ 1617 / 7215, 172 ins, 508 del, 937 sub ] exp_pdnn/cnn/decode_test/wer_2
+

@@ -1,0 +1,28 @@
+#!/bin/bash
+
+# the SAT model
+%WER 44.50 [ 74529 / 167480, 8902 ins, 13372 del, 52255 sub ] exp/tri5a/decode/cer_13
+
+# run-dnn.sh
+%WER 36.77 [ 61582 / 167480, 7783 ins, 11586 del, 42213 sub ] exp_pdnn/dnn/decode/cer_10
+
+# run-bnf-tandem.sh
+%WER 37.24 [ 62374 / 167480, 6921 ins, 12198 del, 43255 sub ] exp_pdnn/bnf_tandem/tri6a/decode/cer_26
+%WER 35.84 [ 60021 / 167480, 5949 ins, 11217 del, 42855 sub ] exp_pdnn/bnf_tandem/tri6a_mmi_b0.1/decode_it1/cer_22
+%WER 35.45 [ 59373 / 167480, 5428 ins, 11971 del, 41974 sub ] exp_pdnn/bnf_tandem/tri6a_mmi_b0.1/decode_it2/cer_22
+%WER 35.42 [ 59326 / 167480, 5199 ins, 12598 del, 41529 sub ] exp_pdnn/bnf_tandem/tri6a_mmi_b0.1/decode_it3/cer_22
+%WER 35.49 [ 59435 / 167480, 5017 ins, 13097 del, 41321 sub ] exp_pdnn/bnf_tandem/tri6a_mmi_b0.1/decode_it4/cer_22
+
+# run-dnn-fbank+pitch.sh
+%WER 36.67 [ 61420 / 167480, 8207 ins, 10761 del, 42452 sub ] exp_pdnn/dnn_fbank_pitch/decode/cer_9
+
+
+
+# The #states in the SAT model exp/tri5a looks too small. So we build a larger SAT model with
+# steps/train_sat.sh \
+#   6000 120000 data/train data/lang exp/tri5a_ali exp/tri6a || exit 1;
+# the SAT model exp/tri6a
+%WER 44.16 [ 73964 / 167480, 9945 ins, 12499 del, 51520 sub ] exp/tri6a/decode/cer_13
+
+# run-dnn.sh : so we get some gains on DNN. Other PDNN systems are likely to be boosted as well.
+%WER 35.60 [ 59621 / 167480, 7667 ins, 11147 del, 40807 sub ] exp_pdnn/dnn_6a/decode/cer_11
