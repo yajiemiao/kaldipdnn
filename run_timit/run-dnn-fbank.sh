@@ -5,15 +5,12 @@
 # is to  be  run after run.sh. Before running this, you should already build
 # the initial GMM model. This script requires a GPU card, and also the "pdnn"
 # toolkit to train the DNN. The input filterbank features are with mean  and
-# variance normalization. 
+# variance normalization.
 
-# For more informaiton regarding the recipes and results, visit our webiste
+# For more informaiton regarding the recipes and results, visit the webiste
 # http://www.cs.cmu.edu/~ymiao/kaldipdnn
 
 working_dir=exp_pdnn/dnn_fbank
-do_ptr=true    # whether to do pre-training
-delete_pfile=true # whether to delete pfiles after DNN training
-
 gmmdir=exp/tri3
 
 # Specify the gpu device to be used
@@ -28,12 +25,12 @@ cmd=run.pl
 # somewhere with a lot of space, preferably on the local GPU-containing machine.
 if [ ! -d pdnn ]; then
   echo "Checking out PDNN code."
-  svn co svn://svn.code.sf.net/p/kaldipdnn/code-0/trunk/pdnn pdnn
+  svn co https://github.com/yajiemiao/pdnn/trunk pdnn
 fi
 
 if [ ! -d steps_pdnn ]; then
   echo "Checking out steps_pdnn scripts."
-  svn co svn://svn.code.sf.net/p/kaldipdnn/code-0/trunk/steps_pdnn steps_pdnn
+  svn co https://github.com/yajiemiao/kaldipdnn/trunk/steps_pdnn steps_pdnn
 fi
 
 if ! nvidia-smi; then
@@ -60,80 +57,100 @@ mkdir -p $working_dir/log
 
 num_pdfs=`gmm-info $gmmdir/final.mdl | grep pdfs | awk '{print $NF}'` || exit 1;
 
-echo ---------------------------------------------------------------------
-echo "Creating DNN training and validation data (pfiles)"
-echo ---------------------------------------------------------------------
-if [ ! -d ${gmmdir}_ali ]; then
-  echo "Generate alignment on train"
-  steps/align_fmllr.sh --nj 16 --cmd "$train_cmd" \
-    data/train data/lang $gmmdir ${gmmdir}_ali || exit 1
+echo =====================================================================
+echo "           Data Split & Alignment & Feature Preparation            "
+echo =====================================================================
+# Split training data into traing and cross-validation sets for DNN
+if [ ! -d data/train_tr95 ]; then
+  utils/subset_data_dir_tr_cv.sh --cv-spk-percent 5 data/train data/train_tr95 data/train_cv05 || exit 1
 fi
+# Alignment on the training and validation data
+for set in tr95 cv05; do
+  if [ ! -d ${gmmdir}_ali_$set ]; then
+    steps/align_fmllr.sh --nj 16 --cmd "$train_cmd" \
+      data/train_$set data/lang $gmmdir ${gmmdir}_ali_$set || exit 1
+  fi
+done
 
-# Generate the fbank features. We generate the 40-dimensional fbanks on each frame
+# Generate the fbank features: 40-dimensional fbanks on each frame
 echo "--num-mel-bins=40" > conf/fbank.conf
 mkdir -p $working_dir/data
-for set in train dev test; do
+for set in train_tr95 train_cv05 dev test; do
   if [ ! -d $working_dir/data/$set ]; then
     cp -r data/$set $working_dir/data/$set
     ( cd $working_dir/data/$set; rm -rf {cmvn,feats}.scp split*; )
-    steps/make_fbank.sh --cmd "$train_cmd" --nj 10 $working_dir/data/$set $working_dir/_log $working_dir/_fbank || exit 1;
+    steps/make_fbank.sh --cmd "$train_cmd" --nj 16 $working_dir/data/$set $working_dir/_log $working_dir/_fbank || exit 1;
     steps/compute_cmvn_stats.sh $working_dir/data/$set $working_dir/_log $working_dir/_fbank || exit 1;
   fi
 done
 
-# By default, inputs include 9 frames (+/-4) of 40-dimensional log-scale filter-banks, with 360 dimensions.
-if [ ! -f $working_dir/train.pfile.done ]; then
-  steps_pdnn/build_nnet_pfile.sh --cmd "$train_cmd" --every-nth-frame 1 --norm-vars true \
-    --do-split true --pfile-unit-size 5 --cv-ratio 0.05 \
-    --splice-opts "--left-context=4 --right-context=4" --input-dim 360 \
-    $working_dir/data/train ${gmmdir}_ali $working_dir || exit 1
-  ( cd $working_dir; rm concat.pfile; )
-  touch $working_dir/train.pfile.done
-fi
+echo =====================================================================
+echo "               Training and Cross-Validation Pfiles                "
+echo =====================================================================
+# By default, DNN inputs include 11 frames of filterbanks
+for set in tr95 cv05; do
+  if [ ! -f $working_dir/${set}.pfile.done ]; then
+    steps_pdnn/build_nnet_pfile.sh --cmd "$train_cmd" --norm-vars true \
+      --splice-opts "--left-context=5 --right-context=5" \
+      $working_dir/data/train_$set ${gmmdir}_ali_$set $working_dir || exit 1
+    ( cd $working_dir; mv concat.pfile ${set}.pfile; gzip ${set}.pfile; )
+    touch $working_dir/${set}.pfile.done
+  fi
+done
+# Rename pfiles to keep consistency
+( cd $working_dir;
+  ln -s tr95.pfile.gz train.pfile.gz; ln -s cv05.pfile.gz valid.pfile.gz
+)
 
-echo ---------------------------------------------------------------------
-echo "Starting DNN training"
-echo ---------------------------------------------------------------------
-feat_dim=$(cat $working_dir/train.pfile |head |grep num_features| awk '{print $2}') || exit 1;
+echo =====================================================================
+echo "                  DNN Pre-training & Fine-tuning                   "
+echo =====================================================================
 
-if $do_ptr && [ ! -f $working_dir/dnn.ptr.done ]; then
-  echo "SDA Pre-training"
+if [ ! -f $working_dir/dnn.ptr.done ]; then
+  echo "RBM Pre-training"
   $cmd $working_dir/log/dnn.ptr.log \
     export PYTHONPATH=$PYTHONPATH:`pwd`/pdnn/ \; \
     export THEANO_FLAGS=mode=FAST_RUN,device=$gpu,floatX=float32 \; \
-    $pythonCMD pdnn/run_SdA.py --train-data "$working_dir/train.pfile,partition=1000m,random=true,stream=true" \
-                          --nnet-spec "$feat_dim:1024:1024:1024:1024:1024:$num_pdfs" \
-                          --first-reconstruct-activation "tanh" \
-                          --wdir $working_dir --output-file $working_dir/dnn.ptr \
-                          --ptr-layer-number 5 --epoch-number 5 || exit 1;
+    $pythonCMD pdnn/cmds/run_RBM.py --train-data "$working_dir/train.pfile.gz,partition=1000m,random=true,stream=false" \
+                               --nnet-spec "$feat_dim:1024:1024:1024:1024:$num_pdfs" --wdir $working_dir \
+                               --ptr-layer-number 4 --param-output-file $working_dir/dnn.ptr || exit 1;
   touch $working_dir/dnn.ptr.done
 fi
+
+# For SDA pre-training
+#$pythonCMD pdnn/cmds/run_SdA.py --train-data "$working_dir/train.pfile.gz,partition=1000m,random=true,stream=false" \
+#                          --nnet-spec "$feat_dim:1024:1024:1024:1024:$num_pdfs" \
+#                          --1stlayer-reconstruct-activation "tanh" \
+#                          --wdir $working_dir --output-file $working_dir/dnn.ptr \
+#                          --ptr-layer-number 4 --epoch-number 5 || exit 1;
+
+# To apply dropout, add "--dropout-factor 0.2,0.2,0.2,0.2" and change the value of "--lrate" to "D:0.8:0.5:0.2,0.2:8"
+# Check run_timit/RESULTS for the results
 
 if [ ! -f $working_dir/dnn.fine.done ]; then
   echo "Fine-tuning DNN"
   $cmd $working_dir/log/dnn.fine.log \
-    export PYTHONPATH=$PYTHONPATH:`pwd`/ptdnn/ \; \
+    export PYTHONPATH=$PYTHONPATH:`pwd`/pdnn/ \; \
     export THEANO_FLAGS=mode=FAST_RUN,device=$gpu,floatX=float32 \; \
-    $pythonCMD pdnn/run_DNN.py --train-data "$working_dir/train.pfile,partition=1000m,random=true,stream=true" \
-                          --valid-data "$working_dir/valid.pfile,partition=400m,random=true,stream=true" \
-                          --nnet-spec "$feat_dim:1024:1024:1024:1024:1024:$num_pdfs" \
-                          --ptr-file $working_dir/dnn.ptr --ptr-layer-number 5 \
-                          --output-format kaldi --lrate "D:0.08:0.5:0.2,0.2:8" \
-                          --wdir $working_dir --output-file $working_dir/dnn.nnet || exit 1;
+    $pythonCMD pdnn/cmds/run_DNN.py --train-data "$working_dir/train.pfile.gz,partition=1000m,random=true,stream=false" \
+                          --valid-data "$working_dir/valid.pfile.gz,partition=200m,random=true,stream=false" \
+                          --nnet-spec "$feat_dim:1024:1024:1024:1024:$num_pdfs" \
+                          --ptr-file $working_dir/dnn.ptr --ptr-layer-number 4 \
+                          --lrate "D:0.08:0.5:0.2,0.2:8" \
+                          --wdir $working_dir --kaldi-output-file $working_dir/dnn.nnet || exit 1;
   touch $working_dir/dnn.fine.done
-  $delete_pfile && rm -rf $working_dir/*.pfile
 fi
 
-echo ---------------------------------------------------------------------
-echo "Decode the final system"
-echo ---------------------------------------------------------------------
+echo =====================================================================
+echo "                           Decoding                                "
+echo =====================================================================
 if [ ! -f  $working_dir/decode.done ]; then
   cp $gmmdir/final.mdl $working_dir || exit 1;  # copy final.mdl for scoring
   graph_dir=$gmmdir/graph
-  steps_pdnn/decode_dnn.sh --nj 8 --scoring-opts "--min-lmwt 1 --max-lmwt 8" --cmd "$decode_cmd" --norm-vars true \
-    $graph_dir $working_dir/data/dev ${gmmdir}_ali $working_dir/decode_dev || exit 1;
-  steps_pdnn/decode_dnn.sh --nj 8 --scoring-opts "--min-lmwt 1 --max-lmwt 8" --cmd "$decode_cmd" --norm-vars true \
-    $graph_dir $working_dir/data/test ${gmmdir}_ali $working_dir/decode_test || exit 1;
+  steps_pdnn/decode_dnn.sh --nj 24 --scoring-opts "--min-lmwt 1 --max-lmwt 8" --cmd "$decode_cmd" \
+    $graph_dir $working_dir/data/dev ${gmmdir}_ali_tr95 $working_dir/decode_dev || exit 1;
+  steps_pdnn/decode_dnn.sh --nj 24 --scoring-opts "--min-lmwt 1 --max-lmwt 8" --cmd "$decode_cmd" \
+    $graph_dir $working_dir/data/test ${gmmdir}_ali_tr95 $working_dir/decode_test || exit 1;
 
   touch $working_dir/decode.done
 fi

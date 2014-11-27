@@ -4,11 +4,6 @@
 
 # Create pfiles for deep neural network training. We assume that the training  alignment
 # is ready and features (either fbanks and fMLLRs) have been generated.
-
-# The command pfile_create needs to  know  the dimension of features.  Thus, you have to 
-# compuate nnet_dim correctly and set it via --nnet-dim. Otherwise, pfile creation would
-# fail.
-
 # Refer to the following comments for configurations.
 
 ## Begin configuration section.  
@@ -18,18 +13,17 @@ nj=4
 cmd=run.pl
 
 splice_opts="--left-context=4 --right-context=4" # frame-splicing options for neural net input
-input_dim=250 # the dimension of neural net input; you have to compute and specify it because pfile_create needs the number
+add_deltas=false
+norm_vars=false  # when doing cmvn, whether to normalize variance
 
-do_concat=false
+do_concat=true # whether to concatenate the individual pfiles into a single one
 
 # Config for splitting pfile into training and valid set; not used for SWBD
+do_split=false  # whether to do pfile splitting
 pfile_unit_size=40 # the number of utterances of each small unit into which the whole pfile is chopped 
-do_split=false
 cv_ratio=0.05 # the ratio of CV data
 
 shuffle_scp=false  # whether the feature scp is shuffled
-
-norm_vars=false  # when doing cmvn, whether to normalize variance
 
 ## End configuration options.
 
@@ -75,14 +69,19 @@ export PATH=$PATH:$PPATH
 
 mkdir -p $dir/log
 echo $splice_opts > $dir/splice_opts
+echo $norm_vars > $dir/norm_vars
+echo $add_deltas > $dir/add_deltas
 [[ -d $sdata && $data/feats.scp -ot $sdata ]] || split_data.sh $data $nj || exit 1;
 
 ## Setup features
-echo "$0: feature: splice(${splice_opts}) norm_vars(${norm_vars})"
+echo "$0: feature: splice(${splice_opts}) norm_vars(${norm_vars}) add_deltas(${add_deltas})"
 feats="ark,s,cs:apply-cmvn --norm-vars=$norm_vars --utt2spk=ark:$sdata/JOB/utt2spk scp:$sdata/JOB/cmvn.scp scp:$sdata/JOB/feats.scp ark:- | splice-feats $splice_opts ark:- ark:- |"
 if $shuffle_scp; then 
   feats="ark,s,cs:apply-cmvn --norm-vars=$norm_vars --utt2spk=ark:$sdata/JOB/utt2spk scp:$sdata/JOB/cmvn.scp \"scp:cat $sdata/JOB/feats.scp | utils/shuffle_list.pl --srand ${seed:-777} |\" ark:- | splice-feats $splice_opts ark:- ark:- |"
 fi
+# Add first and second-order deltas if needed
+$add_deltas && feats="$feats add-deltas ark:- ark:- |"
+
 ## Get the dimension of the features
 $cmd JOB=1:1 $dir/log/get_feat_dim.log \
     feat-to-dim "$feats subset-feats --n=1 ark:- ark:- |" ark,t:$dir/feat_dim || exit 1;

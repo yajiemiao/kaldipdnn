@@ -3,56 +3,49 @@
 # --------------------------------------------------------------------------------------------------------------
 # run-dnn.sh : DNN Models over fMLLR features
 # -------------------------------------------------------------------------------------------------------------- 
-# pre-training with SdA
-%WER 19.2 | 400 15057 | 83.8 11.6 4.7 3.0 19.2 99.8 | -0.959 | exp_pdnn/dnn/decode_dev/score_4/ctm_39phn.filt.sys
-%WER 20.5 | 192 7215 | 81.4 12.5 6.0 2.0 20.5 100.0 | -0.279 | exp_pdnn/dnn/decode_test/score_6/ctm_39phn.filt.sys
-# with dropout
-%WER 18.5 | 400 15057 | 83.9 11.4 4.7 2.5 18.5 99.3 | -0.742 | exp_pdnn/dnn_dropout/decode_dev/score_5/ctm_39phn.filt.sys
-%WER 19.8 | 192 7215 | 83.2 12.0 4.8 3.0 19.8 99.5 | -1.099 | exp_pdnn/dnn_dropout/decode_test/score_4/ctm_39phn.filt.sys
-# pre-training with RBM
-%WER 18.8 | 400 15057 | 83.4 11.4 5.1 2.3 18.8 99.8 | -0.592 | exp_pdnn/dnn_rbm/decode_dev/score_5/ctm_39phn.filt.sys
-%WER 20.2 | 192 7215 | 82.9 11.9 5.2 3.1 20.2 100.0 | -0.917 | exp_pdnn/dnn_rbm/decode_test/score_4/ctm_39phn.filt.sys
+%WER 18.8 | 400 15057 | 83.4 11.4 5.1 2.3 18.8 99.8 | -0.592 | exp_pdnn/dnn/decode_dev/score_5/ctm_39phn.filt.sys
+%WER 20.2 | 192 7215 | 82.9 11.9 5.2 3.1 20.2 100.0 | -0.917 | exp_pdnn/dnn/decode_test/score_4/ctm_39phn.filt.sys
+# with dropout applied
+%WER 18.0 | 400 15057 | 84.3 11.2 4.5 2.3 18.0 99.3 | -0.706 | exp_pdnn/dnn_dropout/decode_dev/score_5/ctm_39phn.filt.sys
+%WER 19.6 | 192 7215 | 83.3 11.9 4.8 3.0 19.6 99.5 | -1.070 | exp_pdnn/dnn_dropout/decode_test/score_4/ctm_39phn.filt.sys
 
 # --------------------------------------------------------------------------------------------------------------
 # run-dnn-maxout.sh : Deep Maxout Networks over fMLLR features
 # --------------------------------------------------------------------------------------------------------------
 %WER 17.5 | 400 15057 | 85.0 10.8 4.2 2.4 17.5 99.8 | -0.859 | exp_pdnn/dnn_maxout/decode_dev/score_5/ctm_39phn.filt.sys
 %WER 19.0 | 192 7215 | 83.4 11.9 4.7 2.4 19.0 99.5 | -0.894 | exp_pdnn/dnn_maxout/decode_test/score_5/ctm_39phn.filt.sys
-# with dropout
+# with dropout applied
 %WER 16.7 | 400 15057 | 85.1 10.3 4.5 1.9 16.7 99.3 | -0.515 | exp_pdnn/dnn_maxout+dropout/decode_dev/score_7/ctm_39phn.filt.sys
 %WER 18.0 | 192 7215 | 84.5 11.1 4.3 2.5 18.0 99.0 | -1.070 | exp_pdnn/dnn_maxout+dropout/decode_test/score_5/ctm_39phn.filt.sys
-# with dropout lr=0.08
-%WER 16.8 | 400 15057 | 85.5 10.5 4.0 2.3 16.8 99.0 | -0.922 | exp_pdnn/dnn_maxout+dropout/decode_dev/score_5/ctm_39phn.filt.sys
-%WER 18.4 | 192 7215 | 84.5 11.4 4.0 2.9 18.4 99.0 | -1.412 | exp_pdnn/dnn_maxout+dropout/decode_test/score_4/ctm_39phn.filt.sys
-# with dropout lr=0.06
-%WER 17.0 | 400 15057 | 85.3 10.6 4.1 2.3 17.0 98.8 | -0.896 | exp_pdnn/dnn_maxout+dropout_V2/decode_dev/score_5/ctm_39phn.filt.sys
-%WER 18.9 | 192 7215 | 84.0 11.8 4.2 2.8 18.9 99.5 | -1.413 | exp_pdnn/dnn_maxout+dropout_V2/decode_test/score_4/ctm_39phn.filt.sys
+# by setting momentum to 0.9, you can improve dnn by ~1.0% and maxout by ~0.5%
 
+# --------------------------------------------------------------------------------------------------------------
+# run-bnf-tandem.sh : Tandem Systems with BNFs Trained on fMLLRs
+# --------------------------------------------------------------------------------------------------------------
 # run-bnf-tandem.sh
-# GMM
-%WER 21.62 [ 3255 / 15057, 451 ins, 943 del, 1861 sub ] exp_pdnn/bnf_tandem/tri4/decode_dev/wer_7
-%WER 22.19 [ 1601 / 7215, 207 ins, 464 del, 930 sub ] exp_pdnn/bnf_tandem/tri4/decode_test/wer_7
-# bMMI
-%WER 21.23 [ 3197 / 15057, 474 ins, 879 del, 1844 sub ] exp_pdnn/bnf_tandem/tri4_mmi_b0.1/decode_dev_it1/wer_7
-%WER 21.17 [ 3188 / 15057, 488 ins, 850 del, 1850 sub ] exp_pdnn/bnf_tandem/tri4_mmi_b0.1/decode_dev_it2/wer_7
-%WER 21.27 [ 3202 / 15057, 480 ins, 867 del, 1855 sub ] exp_pdnn/bnf_tandem/tri4_mmi_b0.1/decode_dev_it3/wer_8
-%WER 21.21 [ 3193 / 15057, 486 ins, 854 del, 1853 sub ] exp_pdnn/bnf_tandem/tri4_mmi_b0.1/decode_dev_it4/wer_8
-%WER 22.08 [ 1593 / 7215, 196 ins, 470 del, 927 sub ] exp_pdnn/bnf_tandem/tri4_mmi_b0.1/decode_test_it1/wer_8
-%WER 22.31 [ 1610 / 7215, 217 ins, 454 del, 939 sub ] exp_pdnn/bnf_tandem/tri4_mmi_b0.1/decode_test_it2/wer_8
-%WER 22.54 [ 1626 / 7215, 234 ins, 440 del, 952 sub ] exp_pdnn/bnf_tandem/tri4_mmi_b0.1/decode_test_it3/wer_8
-%WER 22.56 [ 1628 / 7215, 227 ins, 455 del, 946 sub ] exp_pdnn/bnf_tandem/tri4_mmi_b0.1/decode_test_it4/wer_9
+# LDA+MLLT
+%WER 16.8 | 400 15057 | 85.5 11.2 3.3 2.4 16.8 99.3 | -1.195 | exp_pdnn/bnf_tandem/tri4/decode_dev/score_11/ctm_39phn.filt.sys
+%WER 18.5 | 192 7215 | 84.1 12.1 3.9 2.6 18.5 99.5 | -1.223 | exp_pdnn/bnf_tandem/tri4/decode_test/score_12/ctm_39phn.filt.sys
+# MMI
+%WER 16.7 | 400 15057 | 85.8 11.0 3.2 2.5 16.7 99.0 | -1.188 | exp_pdnn/bnf_tandem/tri4_mmi_b0.1/decode_dev_it1/score_11/ctm_39phn.filt.sys
+%WER 16.8 | 400 15057 | 85.7 11.2 3.2 2.5 16.8 99.0 | -1.119 | exp_pdnn/bnf_tandem/tri4_mmi_b0.1/decode_dev_it2/score_12/ctm_39phn.filt.sys
+%WER 17.0 | 400 15057 | 85.6 11.3 3.1 2.7 17.0 99.0 | -1.085 | exp_pdnn/bnf_tandem/tri4_mmi_b0.1/decode_dev_it3/score_12/ctm_39phn.filt.sys
+%WER 17.2 | 400 15057 | 85.5 11.4 3.0 2.8 17.2 98.8 | -1.053 | exp_pdnn/bnf_tandem/tri4_mmi_b0.1/decode_dev_it4/score_12/ctm_39phn.filt.sys
+%WER 18.4 | 192 7215 | 84.3 12.0 3.7 2.8 18.4 99.5 | -1.191 | exp_pdnn/bnf_tandem/tri4_mmi_b0.1/decode_test_it1/score_12/ctm_39phn.filt.sys
+%WER 18.6 | 192 7215 | 84.7 12.1 3.3 3.3 18.6 100.0 | -1.297 | exp_pdnn/bnf_tandem/tri4_mmi_b0.1/decode_test_it2/score_10/ctm_39phn.filt.sys
+%WER 18.6 | 192 7215 | 84.6 12.1 3.3 3.3 18.6 100.0 | -1.227 | exp_pdnn/bnf_tandem/tri4_mmi_b0.1/decode_test_it3/score_11/ctm_39phn.filt.sys
+%WER 18.7 | 192 7215 | 84.6 12.0 3.4 3.3 18.7 100.0 | -1.144 | exp_pdnn/bnf_tandem/tri4_mmi_b0.1/decode_test_it4/score_12/ctm_39phn.filt.sys
 # SGMM
-%WER 20.50 [ 3086 / 15057, 332 ins, 985 del, 1769 sub ] exp_pdnn/bnf_tandem/sgmm5a/decode_dev/wer_6
-%WER 22.13 [ 1597 / 7215, 181 ins, 512 del, 904 sub ] exp_pdnn/bnf_tandem/sgmm5a/decode_test/wer_6
-
+%WER 16.3 | 400 15057 | 85.7 10.8 3.5 2.0 16.3 99.0 | -1.114 | exp_pdnn/bnf_tandem/sgmm5a/decode_dev/score_9/ctm_39phn.filt.sys
+%WER 17.8 | 192 7215 | 84.2 11.4 4.4 2.0 17.8 100.0 | -0.978 | exp_pdnn/bnf_tandem/sgmm5a/decode_test/score_12/ctm_39phn.filt.sys
 
 # run-dnn-fbank.sh
-%WER 24.90 [ 3749 / 15057, 470 ins, 1072 del, 2207 sub ] exp_pdnn/dnn_fbank/decode_dev/wer_3
-%WER 26.47 [ 1910 / 7215, 300 ins, 473 del, 1137 sub ] exp_pdnn/dnn_fbank/decode_test/wer_2
+%WER 22.5 | 400 15057 | 80.1 14.3 5.6 2.6 22.5 99.8 | -0.340 | exp_pdnn/dnn_fbank/decode_dev/score_5/ctm_39phn.filt.sys
+%WER 24.0 | 192 7215 | 78.7 15.1 6.1 2.8 24.0 100.0 | -0.244 | exp_pdnn/dnn_fbank/decode_test/score_5/ctm_39phn.filt.sys
+# if momentum increased to 0.9 for faster convergence
+%WER 20.2 | 400 15057 | 82.4 12.9 4.7 2.6 20.2 99.5 | -0.424 | exp_pdnn/dnn_fbank/decode_dev/score_5/ctm_39phn.filt.sys
+%WER 21.6 | 192 7215 | 81.2 13.7 5.1 2.8 21.6 100.0 | -0.397 | exp_pdnn/dnn_fbank/decode_test/score_5/ctm_39phn.filt.sys
 
-# run-cnn.sh. This is the fast version of CNN, with "--use-fast true". This version achieves a 2.4x speed up, 
-# while at the same time giving comparable dev and better test WER% compared with the old version.
-# You can switch to the old version simply by eliminating "--use-fast true"
-%WER 21.69 [ 3266 / 15057, 367 ins, 1020 del, 1879 sub ] exp_pdnn/cnn/decode_dev/wer_2
-%WER 22.41 [ 1617 / 7215, 172 ins, 508 del, 937 sub ] exp_pdnn/cnn/decode_test/wer_2
-
+# run-cnn.sh 
+%WER 19.2 | 400 15057 | 83.0 12.3 4.7 2.2 19.2 99.3 | -0.372 | exp_pdnn/cnn/decode_dev/score_6/ctm_39phn.filt.sys
+%WER 20.6 | 192 7215 | 82.5 12.8 4.7 3.1 20.6 99.5 | -0.990 | exp_pdnn/cnn/decode_test/score_4/ctm_39phn.filt.sys

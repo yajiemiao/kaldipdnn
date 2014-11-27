@@ -22,7 +22,9 @@ max_arcs=-1
 skip_scoring=false # whether to skip WER scoring
 scoring_opts=
 
-norm_vars=false  # when doing cmvn, whether to normalize variance; has to be consistent with build_nnet_pfile.sh
+splice_opts=
+norm_vars=
+add_deltas=
 
 ## End configuration section
 
@@ -57,7 +59,9 @@ sdata=$data/split$nj;
 thread_string=
 [ $num_threads -gt 1 ] && thread_string="-parallel --num-threads=$num_threads"
 
-splice_opts=`cat $srcdir/splice_opts 2>/dev/null` # frame-splicing options.
+[ -z "$splice_opts" ] && splice_opts=`cat $srcdir/splice_opts 2>/dev/null` # frame-splicing options.
+[ -z "$add_deltas" ] && add_deltas=`cat $srcdir/add_deltas 2>/dev/null`
+[ -z "$norm_vars" ] && norm_vars=`cat $srcdir/norm_vars 2>/dev/null`
 
 mkdir -p $dir/log
 split_data.sh $data $nj || exit 1;
@@ -75,8 +79,7 @@ $cmd $dir/log/class_count.log \
     analyze-counts --binary=false ark:- $dir/class.counts || exit 1;
 
 ## Set up the features
-echo "$0: feature: splice(${splice_opts}) norm_vars(${norm_vars})"
-
+echo "$0: feature: splice(${splice_opts}) norm_vars(${norm_vars}) add_deltas(${add_deltas})"
 feats="ark,s,cs:apply-cmvn --norm-vars=$norm_vars --utt2spk=ark:$sdata/JOB/utt2spk scp:$sdata/JOB/cmvn.scp scp:$sdata/JOB/feats.scp ark:- | splice-feats $splice_opts ark:- ark:- |"
 ##
 finalfeats="$feats nnet-forward --class-frame-counts=$dir/class.counts --apply-log=true --no-softmax=false $srcdir/dnn.nnet ark:- ark:- |"

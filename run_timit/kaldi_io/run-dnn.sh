@@ -1,15 +1,14 @@
 #!/bin/bash
 
 # Apache 2.0
-# This is the script  that trains DNN model over fMLLR features.  It is to be
-# run after run.sh. Before running this, you should already build the initial
-# GMM model. This script requires a GPU, and also the "pdnn" toolkit to train
-# the DNN.
+# This  is the script that trains DNN system. It is to be run after run.sh. 
+# Before running this, you should already build the initial GMM model. This
+# script requires a GPU, and also the "pdnn" toolkit to train the DNN.
 
 # For more informaiton regarding the recipes and results, visit the webiste
 # http://www.cs.cmu.edu/~ymiao/kaldipdnn
 
-working_dir=exp_pdnn/dnn
+working_dir=exp_pdnn/dnn_tmp_V2
 gmmdir=exp/tri3
 
 # Specify the gpu device to be used
@@ -96,18 +95,19 @@ echo "               Training and Cross-Validation Pfiles                "
 echo =====================================================================
 # By default, DNN inputs include 11 frames of fMLLR
 for set in tr95 cv05; do
-  if [ ! -f $working_dir/${set}.pfile.done ]; then
-    steps_pdnn/build_nnet_pfile.sh --cmd "$train_cmd" --norm-vars false \
-      --splice-opts "--left-context=5 --right-context=5" \
-      $working_dir/data/train_$set ${gmmdir}_ali_$set $working_dir || exit 1
-    ( cd $working_dir; mv concat.pfile ${set}.pfile; gzip ${set}.pfile; )
-    touch $working_dir/${set}.pfile.done
+  if [ ! -f $working_dir/${set}.netdata.done ]; then
+    steps_pdnn/make_nnet_data.sh --nj 10 --cmd "$train_cmd" --norm-vars false \
+      --splice-opts "--left-context=0 --right-context=0" \
+      $working_dir/data_nnet/train_$set $working_dir/data/train_$set \
+      $working_dir/_nnet_input ${gmmdir}_ali_$set $working_dir || exit 1
+    touch $working_dir/${set}.netdata.done
   fi
 done
 # Rename pfiles to keep consistency
-( cd $working_dir;
-  ln -s tr95.pfile.gz train.pfile.gz; ln -s cv05.pfile.gz valid.pfile.gz
-)
+cat $working_dir/data_nnet/train_tr95/feats.scp | utils/shuffle_list.pl --srand ${seed:-777} > $working_dir/train_tr95.scp
+cat $working_dir/data_nnet/train_cv05/feats.scp | utils/shuffle_list.pl --srand ${seed:-777} > $working_dir/train_cv05.scp
+
+exit
 
 echo =====================================================================
 echo "                  DNN Pre-training & Fine-tuning                   "
@@ -154,10 +154,11 @@ echo =====================================================================
 if [ ! -f  $working_dir/decode.done ]; then
   cp $gmmdir/final.mdl $working_dir || exit 1;  # copy final.mdl for scoring
   graph_dir=$gmmdir/graph
-  steps_pdnn/decode_dnn.sh --nj 12 --scoring-opts "--min-lmwt 1 --max-lmwt 8" --cmd "$decode_cmd" \
+  steps_pdnn/decode_dnn.sh --nj 12 --scoring-opts "--min-lmwt 1 --max-lmwt 8" --cmd "$decode_cmd" --norm-vars false \
     $graph_dir $working_dir/data/dev ${gmmdir}_ali_tr95 $working_dir/decode_dev || exit 1;
-  steps_pdnn/decode_dnn.sh --nj 12 --scoring-opts "--min-lmwt 1 --max-lmwt 8" --cmd "$decode_cmd" \
+  steps_pdnn/decode_dnn.sh --nj 12 --scoring-opts "--min-lmwt 1 --max-lmwt 8" --cmd "$decode_cmd" --norm-vars false \
     $graph_dir $working_dir/data/test ${gmmdir}_ali_tr95 $working_dir/decode_test || exit 1;
+
   touch $working_dir/decode.done
 fi
 

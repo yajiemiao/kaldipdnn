@@ -1,18 +1,15 @@
 #!/bin/bash
 
 # Apache 2.0
-# This script  trains DNN acoustic models with the maxout units. It is to be
+# This script trains  Maxout Network  models over fMLLR features. It is to be
 # run after run.sh. Before running this, you should already build the initial
 # GMM model. This script requires a GPU, and also the "pdnn" toolkit to train
 # the DNN. 
 
-# For more informaiton regarding the recipes and results, visit our webiste
+# For more informaiton regarding the recipes and results, visit the webiste
 # http://www.cs.cmu.edu/~ymiao/kaldipdnn
 
 working_dir=exp_pdnn/dnn_maxout
-do_ptr=true      # whether to do pre-training
-delete_pfile=false # whether to delete pfiles after DNN training
-
 gmmdir=exp/tri3
 
 # Specify the gpu device to be used
@@ -27,12 +24,12 @@ cmd=run.pl
 # somewhere with a lot of space, preferably on the local GPU-containing machine.
 if [ ! -d pdnn ]; then
   echo "Checking out PDNN code."
-  svn co svn://svn.code.sf.net/p/kaldipdnn/code-0/trunk/pdnn pdnn
+  svn co https://github.com/yajiemiao/pdnn/trunk pdnn
 fi
 
 if [ ! -d steps_pdnn ]; then
   echo "Checking out steps_pdnn scripts."
-  svn co svn://svn.code.sf.net/p/kaldipdnn/code-0/trunk/steps_pdnn steps_pdnn
+  svn co https://github.com/yajiemiao/kaldipdnn/trunk/steps_pdnn steps_pdnn
 fi
 
 if ! nvidia-smi; then
@@ -97,7 +94,7 @@ done
 echo =====================================================================
 echo "               Training and Cross-Validation Pfiles                "
 echo =====================================================================
-# By default, DNN inputs include 9 frames of fMLLR (dim = 360)
+# By default, DNN inputs include 11 frames of fMLLR
 for set in tr95 cv05; do
   if [ ! -f $working_dir/${set}.pfile.done ]; then
     steps_pdnn/build_nnet_pfile.sh --cmd "$train_cmd" --norm-vars false \
@@ -127,16 +124,15 @@ feat_dim=$(gunzip -c $working_dir/train.pfile.gz |head |grep num_features| awk '
 if [ ! -f $working_dir/dnn.fine.done ]; then
   echo "Fine-tuning DNN"
   $cmd $working_dir/log/dnn.fine.log \
-    export PYTHONPATH=$PYTHONPATH:`pwd`/ptdnn/ \; \
+    export PYTHONPATH=$PYTHONPATH:`pwd`/pdnn/ \; \
     export THEANO_FLAGS=mode=FAST_RUN,device=$gpu,floatX=float32 \; \
-    $pythonCMD pdnn/run_DNN.py --train-data "$working_dir/train.pfile.gz,partition=2000m,random=true,stream=true" \
-                          --valid-data "$working_dir/valid.pfile.gz,partition=600m,random=true,stream=true" \
+    $pythonCMD pdnn/cmds/run_DNN.py --train-data "$working_dir/train.pfile.gz,partition=1000m,random=true,stream=false" \
+                          --valid-data "$working_dir/valid.pfile.gz,partition=200m,random=true,stream=false" \
                           --nnet-spec "$feat_dim:625:625:625:625:$num_pdfs" \
                           --activation "maxout:3" \
-                          --output-format kaldi --lrate "D:0.008:0.5:0.2,0.2:8" \
-                          --wdir $working_dir --output-file $working_dir/dnn.nnet || exit 1;
+                          --lrate "D:0.008:0.5:0.2,0.2:8" \
+                          --wdir $working_dir --kaldi-output-file $working_dir/dnn.nnet || exit 1;
   touch $working_dir/dnn.fine.done
-  $delete_pfile && rm -rf $working_dir/*.pfile
 fi
 
 echo =====================================================================
@@ -145,11 +141,10 @@ echo =====================================================================
 if [ ! -f  $working_dir/decode.done ]; then
   cp $gmmdir/final.mdl $working_dir || exit 1;  # copy final.mdl for scoring
   graph_dir=$gmmdir/graph
-  steps_pdnn/decode_dnn.sh --nj 12 --scoring-opts "--min-lmwt 1 --max-lmwt 8" --cmd "$decode_cmd" --norm-vars false \
+  steps_pdnn/decode_dnn.sh --nj 12 --scoring-opts "--min-lmwt 1 --max-lmwt 8" --cmd "$decode_cmd" \
     $graph_dir $working_dir/data/dev ${gmmdir}_ali_tr95 $working_dir/decode_dev || exit 1;
-  steps_pdnn/decode_dnn.sh --nj 12 --scoring-opts "--min-lmwt 1 --max-lmwt 8" --cmd "$decode_cmd" --norm-vars false \
+  steps_pdnn/decode_dnn.sh --nj 12 --scoring-opts "--min-lmwt 1 --max-lmwt 8" --cmd "$decode_cmd" \
     $graph_dir $working_dir/data/test ${gmmdir}_ali_tr95 $working_dir/decode_test || exit 1;
-
   touch $working_dir/decode.done
 fi
 
