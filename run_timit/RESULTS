@@ -39,13 +39,17 @@
 %WER 16.3 | 400 15057 | 85.7 10.8 3.5 2.0 16.3 99.0 | -1.114 | exp_pdnn/bnf_tandem/sgmm5a/decode_dev/score_9/ctm_39phn.filt.sys
 %WER 17.8 | 192 7215 | 84.2 11.4 4.4 2.0 17.8 100.0 | -0.978 | exp_pdnn/bnf_tandem/sgmm5a/decode_test/score_12/ctm_39phn.filt.sys
 
-# run-dnn-fbank.sh
+# --------------------------------------------------------------------------------------------------------------
+# run-dnn-fbank.sh : DNN Models over filterbank features
+# --------------------------------------------------------------------------------------------------------------
 %WER 22.5 | 400 15057 | 80.1 14.3 5.6 2.6 22.5 99.8 | -0.340 | exp_pdnn/dnn_fbank/decode_dev/score_5/ctm_39phn.filt.sys
 %WER 24.0 | 192 7215 | 78.7 15.1 6.1 2.8 24.0 100.0 | -0.244 | exp_pdnn/dnn_fbank/decode_test/score_5/ctm_39phn.filt.sys
 # if momentum increased to 0.9 for faster convergence
 %WER 20.2 | 400 15057 | 82.4 12.9 4.7 2.6 20.2 99.5 | -0.424 | exp_pdnn/dnn_fbank/decode_dev/score_5/ctm_39phn.filt.sys
 %WER 21.6 | 192 7215 | 81.2 13.7 5.1 2.8 21.6 100.0 | -0.397 | exp_pdnn/dnn_fbank/decode_test/score_5/ctm_39phn.filt.sys
 
-# run-cnn.sh 
+# --------------------------------------------------------------------------------------------------------------
+# run-cnn.sh : CNN Models over filterbank features
+# -------------------------------------------------------------------------------------------------------------- 
 %WER 19.2 | 400 15057 | 83.0 12.3 4.7 2.2 19.2 99.3 | -0.372 | exp_pdnn/cnn/decode_dev/score_6/ctm_39phn.filt.sys
 %WER 20.6 | 192 7215 | 82.5 12.8 4.7 3.1 20.6 99.5 | -0.990 | exp_pdnn/cnn/decode_test/score_4/ctm_39phn.filt.sys
