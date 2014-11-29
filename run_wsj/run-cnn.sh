@@ -1,31 +1,23 @@
 #!/bin/bash
 
 # Apache 2.0
-# This script builds CNN hybrid systems over the filterbank features. It is
-# to be run after run.sh. Before running this, you should already build the 
-# initial GMM model. This script requires a GPU, and  also the "pdnn" tool-
-# kit to train the CNN. The input filterbank  features are  with  mean  and
-# variance normalization. We are applying 2D convolution (time x frequency).
-# You can easily switch to 1D convolution (only on frequency) by redefining
-# the CNN architecture.
+# This script trains CNN model over the filterbank features. It  is to be run
+# after run.sh. Before running this, you should already build the initial GMM
+# GMM model. This script requires a GPU, and also the "pdnn" toolkit to train
+# CNN. The input filterbank features are with mean and variance normalization. 
 
-# For more informaiton regarding the recipes and results, visit our webiste
+# The input features and CNN architecture follow the IBM configuration: 
+# Hagen Soltau, George Saon, and Tara N. Sainath. Joint Training of Convolu-
+# tional and non-Convolutional Neural Networks
+
+# For more informaiton regarding the recipes and results, visit the webiste
 # http://www.cs.cmu.edu/~ymiao/kaldipdnn
 
 working_dir=exp_pdnn/cnn
-delete_pfile=true # whether to delete pfiles after CNN training
-
 gmmdir=exp/tri4b
 
 # Specify the gpu device to be used
 gpu=gpu
-
-# Here are two critical variables. With the following default configuration,
-# we input speech frames as 29x29 images into CNN. Convolution over the time
-# axis is not intuitive. But in practice, this works well. If you change the
-# values, then you have to change the CNN definition accordingly.
-fbank_dim=29  # the dimension of fbanks on each frame
-splice_opts="--left-context=14 --right-context=14"  # splice of fbank frames over time
 
 cmd=run.pl
 . cmd.sh
@@ -36,12 +28,12 @@ cmd=run.pl
 # somewhere with a lot of space, preferably on the local GPU-containing machine.
 if [ ! -d pdnn ]; then
   echo "Checking out PDNN code."
-  svn co svn://svn.code.sf.net/p/kaldipdnn/code-0/trunk/pdnn pdnn
+  svn co https://github.com/yajiemiao/pdnn/trunk pdnn
 fi
 
 if [ ! -d steps_pdnn ]; then
   echo "Checking out steps_pdnn scripts."
-  svn co svn://svn.code.sf.net/p/kaldipdnn/code-0/trunk/steps_pdnn steps_pdnn
+  svn co https://github.com/yajiemiao/kaldipdnn/trunk/steps_pdnn steps_pdnn
 fi
 
 if ! nvidia-smi; then
@@ -68,115 +60,114 @@ mkdir -p $working_dir/log
 
 num_pdfs=`gmm-info $gmmdir/final.mdl | grep pdfs | awk '{print $NF}'` || exit 1;
 
-echo ---------------------------------------------------------------------
-echo "Generate alignment and prepare fMLLR features"
-echo ---------------------------------------------------------------------
-# Alignment on the training data
-if [ ! -d ${gmmdir}_ali ]; then
-  echo "Generate alignment on train_si284"
-  steps/align_fmllr.sh --nj 24 --cmd "$train_cmd" \
-    data/train_si284 data/lang $gmmdir ${gmmdir}_ali || exit 1
+echo =====================================================================
+echo "           Data Split & Alignment & Feature Preparation            "
+echo =====================================================================
+# Split training data into traing and cross-validation sets for DNN
+if [ ! -d data/train_tr95 ]; then
+  utils/subset_data_dir_tr_cv.sh --cv-spk-percent 5 data/train_si284 data/train_tr95 data/train_cv05 || exit 1
 fi
+# Alignment on the training and validation data
+for set in tr95 cv05; do
+  if [ ! -d ${gmmdir}_ali_$set ]; then
+    steps/align_fmllr.sh --nj 14 --cmd "$train_cmd" \
+      data/train_$set data/lang $gmmdir ${gmmdir}_ali_$set || exit 1
+  fi
+done
 
-# Generate the fbank features. We set nj=8 because test_eval92 cannot accept >8 splits.
-# We generate 29-dimensional fbanks on each frame; fbank.conf is overwritten here.
-echo "--num-mel-bins=$fbank_dim" > conf/fbank.conf
+# Generate the fbank features: 40-dimensional fbanks on each frame
+echo "--num-mel-bins=40" > conf/fbank.conf
 mkdir -p $working_dir/data
-for set in train_si284 test_dev93 test_eval92; do
+for set in train_tr95 train_cv05; do
   if [ ! -d $working_dir/data/$set ]; then
     cp -r data/$set $working_dir/data/$set
+    ( cd $working_dir/data/$set; rm -rf {cmvn,feats}.scp split*; )
+    steps/make_fbank.sh --cmd "$train_cmd" --nj 14 $working_dir/data/$set $working_dir/_log $working_dir/_fbank || exit 1;
+    steps/compute_cmvn_stats.sh $working_dir/data/$set $working_dir/_log $working_dir/_fbank || exit 1;
+  fi
+done
+
+for set in dev93 eval92; do
+  if [ ! -d $working_dir/data/$set ]; then
+    cp -r data/test_$set $working_dir/data/$set
     ( cd $working_dir/data/$set; rm -rf {cmvn,feats}.scp split*; )
     steps/make_fbank.sh --cmd "$train_cmd" --nj 8 $working_dir/data/$set $working_dir/_log $working_dir/_fbank || exit 1;
     steps/compute_cmvn_stats.sh $working_dir/data/$set $working_dir/_log $working_dir/_fbank || exit 1;
   fi
 done
 
-echo ---------------------------------------------------------------------
-echo "Creating CNN training and validation data (pfiles)"
-echo ---------------------------------------------------------------------
-# By default, inputs include 29 frames (+/-14) of 29-dimensional log-scale filter-banks,
-# so that we take each frame as an image.
-if [ ! -f $working_dir/train.pfile.done ]; then
-  steps_pdnn/build_nnet_pfile.sh --cmd "$train_cmd" --every-nth-frame 1 --norm-vars true \
-    --do-split true --pfile-unit-size 30 --cv-ratio 0.05 \
-    --splice-opts "$splice_opts" --input-dim 841 \
-    $working_dir/data/train_si284 ${gmmdir}_ali $working_dir || exit 1
-  ( cd $working_dir; rm concat.pfile; )
-  touch $working_dir/train.pfile.done
-fi
-
-echo ---------------------------------------------------------------------
-echo "Train CNN acoustic model"
-echo ---------------------------------------------------------------------
-feat_dim=$(cat $working_dir/train.pfile |head |grep num_features| awk '{print $2}') || exit 1;
-
-# here nnet-spec and output-file specify the *fully-connected* layers
-if [ ! -f $working_dir/cnn.fine.done ]; then
-  echo "$0: Training CNN"
-  $cmd $working_dir/log/cnn.fine.log \
-    export PYTHONPATH=$PYTHONPATH:`pwd`/pdnn/ \; \
-    export THEANO_FLAGS=mode=FAST_RUN,device=$gpu,floatX=float32 \; \
-    $pythonCMD pdnn/run_CNN.py --train-data "$working_dir/train.pfile,partition=2000m,random=true,stream=true" \
-                          --valid-data "$working_dir/valid.pfile,partition=600m,random=true,stream=true" \
-                          --conv-nnet-spec "1x29x29:64,4x4,p2x2:128,5x5,p3x3,f" --conv-output-file $working_dir/conv.nnet \
-                          --nnet-spec "1024:1024:1024:1024:$num_pdfs" --output-file $working_dir/dnn.nnet \
-                          --lrate "D:0.08:0.5:0.2,0.2:8" --momentum 0.5 \
-                          --use-fast true --wdir $working_dir  || exit 1;
-  touch $working_dir/cnn.fine.done
-  $delete_pfile && rm -rf $working_dir/*.pfile
-fi
-
-echo "Dump convolution activations on test_dev93 and test_eval92"
-mkdir -p $working_dir/data_conv
-for set in test_dev93 test_eval92; do
-  cp -r $working_dir/data/$set $working_dir/data_conv/$set
-  ( cd $working_dir/data_conv/$set; rm -rf {cmvn,feats}.scp split*; )
-
-  if [ ! -f $working_dir/txt.feat.$set.done ]; then
-    echo "Txt format of fbank features on $set"
-    # generate the txt format of fbank features
-    steps_pdnn/generate_txt_fbank.sh --cmd "$train_cmd"  \
-      --input_splice_opts "$splice_opts" --norm-vars true \
-      $working_dir/data/$set $working_dir/_log $working_dir || exit 1;
-    if [ ! -f $working_dir/fbank_txt_${set}.ark ]; then
-      echo "No fbank_txt_${set}.ark was generated" && exit 1;
-    fi
-    touch $working_dir/txt.feat.$set.done
-  fi
-  if [ ! -f $working_dir/conv.feat.$set.done ]; then
-    mkdir -p $working_dir/_conv
-    echo "Input txt features to the conv net"
-    # Now we switch to GPU. Note that conv-layer-number has to comply with your CNN definition
-    $cmd $working_dir/_log/conv.feat.$set.log \
-      export PYTHONPATH=$PYTHONPATH:`pwd`/pdnn/ \; \
-      export THEANO_FLAGS=mode=FAST_RUN,device=$gpu,floatX=float32 \; \
-      $pythonCMD pdnn/run_CnnFeat.py --use-fast true --ark-file $working_dir/fbank_txt_${set}.ark \
-                          --conv-net-file $working_dir/conv.nnet --conv-layer-number 2 \
-                          --wdir $working_dir --output-file-prefix $working_dir/_conv/conv_$set || exit 1;
-    cp $working_dir/_conv/conv_${set}.scp $working_dir/data_conv/$set/feats.scp
-
-    # It's critical to generate "fake" CMVN states here.
-    steps/compute_cmvn_stats.sh --fake \
-      $working_dir/data_conv/$set $working_dir/_log $working_dir/_conv || exit 1;  
- 
-    touch $working_dir/conv.feat.$set.done
+echo =====================================================================
+echo "               Training and Cross-Validation Pfiles                "
+echo =====================================================================
+# By default, CNN inputs include 11 frames of filterbanks, and with delta
+# and double-deltas.
+for set in tr95 cv05; do
+  if [ ! -f $working_dir/${set}.pfile.done ]; then
+    steps_pdnn/build_nnet_pfile.sh --cmd "$train_cmd" --norm-vars true --add-deltas true --do-concat false \
+      --splice-opts "--left-context=5 --right-context=5" \
+      $working_dir/data/train_$set ${gmmdir}_ali_$set $working_dir || exit 1
+    touch $working_dir/${set}.pfile.done
   fi
 done
 
-echo ---------------------------------------------------------------------
-echo "Decoding the final system"
-echo ---------------------------------------------------------------------
+echo =====================================================================
+echo "                        CNN  Fine-tuning                           "
+echo =====================================================================
+# CNN is configed in the way that it has (approximately) the same number of trainable parameters as DNN
+# (e.g., the DNN in run-dnn-fbank.sh). Also, we adopt "--momentum 0.9" becuase CNN over filterbanks seems
+# to converge slowly. So we increase momentum to speed up convergence.
+if [ ! -f $working_dir/cnn.fine.done ]; then
+  echo "Fine-tuning CNN"
+  $cmd $working_dir/log/cnn.fine.log \
+    export PYTHONPATH=$PYTHONPATH:`pwd`/pdnn/ \; \
+    export THEANO_FLAGS=mode=FAST_RUN,device=$gpu,floatX=float32 \; \
+    $pythonCMD pdnn/cmds/run_CNN.py --train-data "$working_dir/train_tr95.pfile.*.gz,partition=2000m,random=true,stream=false" \
+                          --valid-data "$working_dir/train_cv05.pfile.*.gz,partition=600m,random=true,stream=false" \
+                          --conv-nnet-spec "3x11x40:256,9x9,p1x3:256,3x4,p1x1,f" \
+                          --nnet-spec "1024:1024:1024:1024:$num_pdfs" \
+                          --lrate "D:0.08:0.5:0.2,0.2:8" --momentum 0.9 \
+                          --wdir $working_dir --param-output-file $working_dir/nnet.param \
+                          --param-output-file $working_dir/nnet.cfg --kaldi-output-file $working_dir/dnn.nnet || exit 1;
+  touch $working_dir/cnn.fine.done
+fi
+
+echo =====================================================================
+echo "                Dump Convolution-Layer Activation                  "
+echo =====================================================================
+mkdir -p $working_dir/data_conv
+for set in dev93; do
+  if [ ! -d $working_dir/data_conv/$set ]; then
+    steps_pdnn/make_conv_feat.sh --nj 10 --cmd "$decode_cmd" \
+      $working_dir/data_conv/$set $working_dir/data/$set $working_dir $working_dir/nnet.param \
+      $working_dir/nnet.cfg $working_dir/_log $working_dir/_conv || exit 1;
+    # Generate *fake* CMVN states here.
+    steps/compute_cmvn_stats.sh --fake \
+      $working_dir/data_conv/$set $working_dir/_log $working_dir/_conv || exit 1;
+  fi
+done
+for set in eval92; do
+  if [ ! -d $working_dir/data_conv/$set ]; then
+    steps_pdnn/make_conv_feat.sh --nj 8 --cmd "$decode_cmd" \
+      $working_dir/data_conv/$set $working_dir/data/$set $working_dir $working_dir/nnet.param \
+      $working_dir/nnet.cfg $working_dir/_log $working_dir/_conv || exit 1;
+    # Generate *fake* CMVN states here.
+    steps/compute_cmvn_stats.sh --fake \
+      $working_dir/data_conv/$set $working_dir/_log $working_dir/_conv || exit 1;
+  fi
+done
+
+echo =====================================================================
+echo "                           Decoding                                "
+echo =====================================================================
 if [ ! -f  $working_dir/decode.done ]; then
   cp $gmmdir/final.mdl $working_dir || exit 1;  # copy final.mdl for scoring
   graph_dir=$gmmdir/graph_bd_tgpr
-  # No splicing on conv feats. So we reset the splice_opts
-  echo "--left-context=0 --right-context=0" > $working_dir/splice_opts
-  # Decode
-  steps_pdnn/decode_dnn.sh --nj 10 --scoring-opts "--min-lmwt 7 --max-lmwt 18" --cmd "$decode_cmd" --norm-vars false \
-    $graph_dir $working_dir/data_conv/test_dev93 ${gmmdir}_ali $working_dir/decode_bd_tgpr_dev93 || exit 1;
-  steps_pdnn/decode_dnn.sh --nj 8 --scoring-opts "--min-lmwt 7 --max-lmwt 18" --cmd "$decode_cmd" --norm-vars false \
-    $graph_dir $working_dir/data_conv/test_eval92 ${gmmdir}_ali $working_dir/decode_bd_tgpr_eval92 || exit 1;
-
+  steps_pdnn/decode_dnn.sh --nj 10 --scoring-opts "--min-lmwt 7 --max-lmwt 18" --cmd "$decode_cmd" \
+    --splice-opts "--left-context=0 --right-context=0" \
+    $graph_dir $working_dir/data_conv/dev93 ${gmmdir}_ali_tr95 $working_dir/decode_bd_tgpr_dev93 || exit 1;
+  steps_pdnn/decode_dnn.sh --nj 8 --scoring-opts "--min-lmwt 7 --max-lmwt 18" --cmd "$decode_cmd" \
+    --splice-opts "--left-context=0 --right-context=0" \
+    $graph_dir $working_dir/data_conv/eval92 ${gmmdir}_ali_tr95 $working_dir/decode_bd_tgpr_eval92 || exit 1;
   touch $working_dir/decode.done
 fi
 

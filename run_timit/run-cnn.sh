@@ -107,7 +107,7 @@ done
 )
 
 echo =====================================================================
-echo "                  DNN Pre-training & Fine-tuning                   "
+echo "                          CNN Fine-tuning                          "
 echo =====================================================================
 # CNN is configed in the way that it has (approximately) the same number of trainable parameters as DNN
 # (e.g., the DNN in run-dnn-fbank.sh). Also, we adopt "--momentum 0.9" becuase CNN over filterbanks seems
@@ -117,11 +117,11 @@ if [ ! -f $working_dir/cnn.fine.done ]; then
   $cmd $working_dir/log/cnn.fine.log \
     export PYTHONPATH=$PYTHONPATH:`pwd`/pdnn/ \; \
     export THEANO_FLAGS=mode=FAST_RUN,device=$gpu,floatX=float32 \; \
-    $pythonCMD pdnn/cmds/run_CNN.py --train-data "$working_dir/train.pfile.gz,partition=2000m,random=true,stream=true" \
-                          --valid-data "$working_dir/valid.pfile.gz,partition=600m,random=true,stream=true" \
+    $pythonCMD pdnn/cmds/run_CNN.py --train-data "$working_dir/train.pfile.gz,partition=1000m,random=true,stream=false" \
+                          --valid-data "$working_dir/valid.pfile.gz,partition=400m,random=true,stream=false" \
                           --conv-nnet-spec "3x11x40:147,9x9,p1x3:147,3x4,p1x1,f" \
                           --nnet-spec "1024:1024:1024:$num_pdfs" \
-                          --lrate "D:0.08:0.5:0.2,0.2:8" --momentum 0.9 \
+                          --lrate "D:0.08:0.5:0.2,0.2:4" --momentum 0.9 \
                           --wdir $working_dir --param-output-file $working_dir/nnet.param \
                           --param-output-file $working_dir/nnet.cfg --kaldi-output-file $working_dir/dnn.nnet || exit 1;
   touch $working_dir/cnn.fine.done

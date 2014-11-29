@@ -14,6 +14,8 @@ splice_opts=
 norm_vars=
 add_deltas=
 
+layer_index=1
+
 ## End configuration options.
 
 echo "$0 $@"  # Print the command line for logging
@@ -81,14 +83,14 @@ fi
 $cmd JOB=1:$nj $logdir/conv_feat.$name.JOB.log \
     export PYTHONPATH=$PYTHONPATH:`pwd`/pdnn/ \; \
     export THEANO_FLAGS=mode=FAST_RUN,device=cpu,floatX=float32 \; \
-    python pdnn/cmds2/run_CnnFeat.py --in-scp-file $feadir/nnet_input.$name.JOB.scp --out-ark-file $feadir/conv_feats.$name.JOB.ark  --cnn-param-file $cnnparam --cnn-cfg-file $cnncfg
-
-#rm $feadir/nnet_input.*
+    python pdnn/cmds2/run_FeatExt_Kaldi.py --in-scp-file $feadir/nnet_input.$name.JOB.scp --out-ark-file $feadir/conv_feats.$name.JOB.ark  --nnet-param $cnnparam --nnet-cfg $cnncfg --layer-index $layer_index
+   
+rm $feadir/nnet_input.*
 
 # Generate the final scp and ark files
 $cmd JOB=1:$nj $logdir/copy_feat.$name.JOB.log \
     copy-feats ark:$feadir/conv_feats.$name.JOB.ark ark,scp:$feadir/feats.$name.JOB.ark,$feadir/feats.$name.JOB.scp
-#rm $feadir/conv_feats.*
+rm $feadir/conv_feats.*
 
 N0=$(cat $srcdata/feats.scp | wc -l)
 N1=$(cat $feadir/feats.$name.*.scp | wc -l)

@@ -112,6 +112,7 @@ done
 echo =====================================================================
 echo "                  DNN Pre-training & Fine-tuning                   "
 echo =====================================================================
+feat_dim=$(gunzip -c $working_dir/train.pfile.gz |head |grep num_features| awk '{print $2}') || exit 1;
 
 if [ ! -f $working_dir/dnn.ptr.done ]; then
   echo "RBM Pre-training"

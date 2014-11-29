@@ -105,6 +105,7 @@ done
 echo =====================================================================
 echo "                  DNN Pre-training & Fine-tuning                   "
 echo =====================================================================
+feat_dim=$(gunzip -c $working_dir/train.pfile.gz |head |grep num_features| awk '{print $2}') || exit 1;
 
 if [ ! -f $working_dir/dnn.ptr.done ]; then
   echo "RBM Pre-training"
@@ -121,7 +122,7 @@ fi
 #$pythonCMD pdnn/cmds/run_SdA.py --train-data "$working_dir/train.pfile.gz,partition=1000m,random=true,stream=false" \
 #                          --nnet-spec "$feat_dim:1024:1024:1024:1024:$num_pdfs" \
 #                          --1stlayer-reconstruct-activation "tanh" \
-#                          --wdir $working_dir --output-file $working_dir/dnn.ptr \
+#                          --wdir $working_dir --param-output-file $working_dir/dnn.ptr \
 #                          --ptr-layer-number 4 --epoch-number 5 || exit 1;
 
 # To apply dropout, add "--dropout-factor 0.2,0.2,0.2,0.2" and change the value of "--lrate" to "D:0.8:0.5:0.2,0.2:8"
