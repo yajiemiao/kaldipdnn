@@ -151,7 +151,7 @@ fi
 # Dump BNF features
 for set in train dev test; do
   if [ ! -d $working_dir/data_bnf/${set} ]; then
-    steps_pdnn/make_bnf_feat.sh --nj 16 --cmd "$train_cmd" --norm-vars false \
+    steps_pdnn/make_bnf_feat.sh --nj 16 --cmd "$train_cmd"  \
       $working_dir/data_bnf/${set} $working_dir/data/${set} $working_dir $working_dir/_log $working_dir/_bnf || exit 1
     # We will normalize BNF features, thus are not providing --fake here. Intuitively, apply CMN over BNF features 
     # might be redundant. But our experiments on WSJ show gains by doing this.

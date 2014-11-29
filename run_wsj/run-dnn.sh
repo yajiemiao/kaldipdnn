@@ -113,17 +113,15 @@ if [ ! -f $working_dir/dnn.ptr.done ]; then
   $cmd $working_dir/log/dnn.ptr.log \
     export PYTHONPATH=$PYTHONPATH:`pwd`/pdnn/ \; \
     export THEANO_FLAGS=mode=FAST_RUN,device=$gpu,floatX=float32 \; \
-    $pythonCMD pdnn/cmds/run_SdA.py --train-data "$working_dir/train_tr95.pfile.*.gz,partition=2000m,random=true,stream=false" \
+    $pythonCMD pdnn/cmds/run_SdA.py --train-data "$working_dir/train_tr95.pfile.*.gz,partition=2000m,random=true,stream=true" \
                                     --nnet-spec "$feat_dim:1024:1024:1024:1024:1024:1024:$num_pdfs" \
-                                    --1stlayer-reconstruct-activation "tanh" --momentum 0.9 \
+                                    --1stlayer-reconstruct-activation "tanh" \
                                     --wdir $working_dir --param-output-file $working_dir/dnn.ptr \
                                     --ptr-layer-number 6 --epoch-number 5 || exit 1;
   touch $working_dir/dnn.ptr.done
 fi
 
 # To apply dropout, add "--dropout-factor 0.2,0.2,0.2,0.2,0.2,0.2" and change the value of "--lrate" to "D:0.8:0.5:0.2,0.2:4"
-# Check run_timit/RESULTS for the results
-
 if [ ! -f $working_dir/dnn.fine.done ]; then
   echo "Fine-tuning DNN"
   $cmd $working_dir/log/dnn.fine.log \

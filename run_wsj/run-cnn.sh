@@ -121,8 +121,8 @@ if [ ! -f $working_dir/cnn.fine.done ]; then
   $cmd $working_dir/log/cnn.fine.log \
     export PYTHONPATH=$PYTHONPATH:`pwd`/pdnn/ \; \
     export THEANO_FLAGS=mode=FAST_RUN,device=$gpu,floatX=float32 \; \
-    $pythonCMD pdnn/cmds/run_CNN.py --train-data "$working_dir/train_tr95.pfile.*.gz,partition=2000m,random=true,stream=false" \
-                          --valid-data "$working_dir/train_cv05.pfile.*.gz,partition=600m,random=true,stream=false" \
+    $pythonCMD pdnn/cmds/run_CNN.py --train-data "$working_dir/train_tr95.pfile.*.gz,partition=2000m,random=true,stream=true" \
+                          --valid-data "$working_dir/train_cv05.pfile.*.gz,partition=600m,random=true,stream=true" \
                           --conv-nnet-spec "3x11x40:256,9x9,p1x3:256,3x4,p1x1,f" \
                           --nnet-spec "1024:1024:1024:1024:$num_pdfs" \
                           --lrate "D:0.08:0.5:0.2,0.2:8" --momentum 0.9 \

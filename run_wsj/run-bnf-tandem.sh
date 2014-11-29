@@ -116,9 +116,9 @@ if [ ! -f $working_dir/dnn.ptr.done ]; then
     export THEANO_FLAGS=mode=FAST_RUN,device=$gpu,floatX=float32 \; \
     $pythonCMD pdnn/cmds/run_SdA.py --train-data "$working_dir/train_tr95.pfile.*.gz,partition=2000m,random=true,stream=false" \
                                     --nnet-spec "$feat_dim:1024:1024:1024:1024:42:1024:$num_pdfs" \
-                                    --1stlayer-reconstruct-activation "tanh" --momentum 0.9 \
+                                    --1stlayer-reconstruct-activation "tanh" \
                                     --wdir $working_dir --param-output-file $working_dir/dnn.ptr \
-                                    --ptr-layer-number 6 --epoch-number 5 || exit 1;
+                                    --ptr-layer-number 4 --epoch-number 5 || exit 1;
   touch $working_dir/dnn.ptr.done
 fi
 
@@ -130,7 +130,7 @@ if [ ! -f $working_dir/dnn.fine.done ]; then
     $pythonCMD pdnn/cmds/run_DNN.py --train-data "$working_dir/train_tr95.pfile.*.gz,partition=2000m,random=true,stream=false" \
                                     --valid-data "$working_dir/train_cv05.pfile.*.gz,partition=600m,random=true,stream=false" \
                                     --nnet-spec "$feat_dim:1024:1024:1024:1024:42:1024:$num_pdfs" \
-                                    --ptr-file $working_dir/dnn.ptr --ptr-layer-number 6 \
+                                    --ptr-file $working_dir/dnn.ptr --ptr-layer-number 4 \
                                     --lrate "D:0.08:0.5:0.2,0.2:8" \
                                     --wdir $working_dir --kaldi-output-file $working_dir/dnn.nnet || exit 1;
   touch $working_dir/dnn.fine.done
@@ -148,7 +148,7 @@ fi
 # Dump BNF features
 for set in train; do
   if [ ! -d $working_dir/data_bnf/${set} ]; then
-    steps_pdnn/make_bnf_feat.sh --nj 24 --cmd "$train_cmd" --norm-vars false \
+    steps_pdnn/make_bnf_feat.sh --nj 24 --cmd "$train_cmd" \
       $working_dir/data_bnf/${set} $working_dir/data/${set} $working_dir $working_dir/_log $working_dir/_bnf || exit 1
     # We will normalize BNF features, thus are not providing --fake here. Intuitively, apply CMN over BNF features 
     # might be redundant. But our experiments on WSJ show gains by doing this.
@@ -158,7 +158,7 @@ for set in train; do
 done
 for set in dev93 eval92; do
   if [ ! -d $working_dir/data_bnf/${set} ]; then
-    steps_pdnn/make_bnf_feat.sh --nj 8 --cmd "$train_cmd" --norm-vars false \
+    steps_pdnn/make_bnf_feat.sh --nj 8 --cmd "$train_cmd" \
       $working_dir/data_bnf/${set} $working_dir/data/${set} $working_dir $working_dir/_log $working_dir/_bnf || exit 1
     # We will normalize BNF features, thus are not providing --fake here. Intuitively, apply CMN over BNF features 
     # might be redundant. But our experiments on WSJ show gains by doing this.

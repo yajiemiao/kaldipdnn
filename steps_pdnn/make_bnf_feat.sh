@@ -10,7 +10,9 @@ stage=1
 nj=8
 cmd=run.pl
 
-norm_vars=false  # when doing cmvn, whether to normalize variance; has to be consistent with build_nnet_pfile.sh
+splice_opts=
+norm_vars=
+add_deltas=
 # End configuration options.
 
 echo "$0 $@"  # Print the command line for logging
@@ -35,8 +37,10 @@ logdir=$4
 feadir=$5
 
 sdata=$srcdata/split$nj;
-splice_opts=`cat $netdir/splice_opts 2>/dev/null` # frame-splicing options.
 name=`basename $data`
+[ -z "$splice_opts" ] && splice_opts=`cat $netdir/splice_opts 2>/dev/null` # frame-splicing options.
+[ -z "$add_deltas" ] && add_deltas=`cat $netdir/add_deltas 2>/dev/null`
+[ -z "$norm_vars" ] && norm_vars=`cat $netdir/norm_vars 2>/dev/null`
 
 mkdir -p $data $logdir $feadir
 [[ -d $sdata && $srcdata/feats.scp -ot $sdata ]] || split_data.sh $srcdata $nj || exit 1;
@@ -46,7 +50,7 @@ for f in $netdir/bnf.nnet; do
 done
 
 ## Set up the features
-echo "$0: feature: splice(${splice_opts}) norm_vars(${norm_vars})"
+echo "$0: feature: splice(${splice_opts}) norm_vars(${norm_vars}) add_deltas(${add_deltas})"
 feats="ark,s,cs:apply-cmvn --norm-vars=$norm_vars --utt2spk=ark:$sdata/JOB/utt2spk scp:$sdata/JOB/cmvn.scp scp:$sdata/JOB/feats.scp ark:- | splice-feats $splice_opts ark:- ark:- |"
 ##
 
