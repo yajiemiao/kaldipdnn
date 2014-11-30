@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Apache 2.0
+# Copyright 2014     Yajie Miao   Carnegie Mellon University      Apache 2.0
 # This is the script that trains DNN system over the filterbank features. It
 # is to  be  run after run.sh. Before running this, you should already build
 # the initial GMM model. This script requires a GPU card, and also the "pdnn"

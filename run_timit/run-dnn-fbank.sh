@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Apache 2.0
+# Copyright 2014    Yajie Miao   Carnegie Mellon University       Apache 2.0
 # This is the script that trains DNN system over the filterbank features. It
 # is to  be  run after run.sh. Before running this, you should already build
 # the initial GMM model. This script requires a GPU card, and also the "pdnn"
@@ -137,7 +137,7 @@ if [ ! -f $working_dir/dnn.fine.done ]; then
                           --valid-data "$working_dir/valid.pfile.gz,partition=200m,random=true,stream=false" \
                           --nnet-spec "$feat_dim:1024:1024:1024:1024:$num_pdfs" \
                           --ptr-file $working_dir/dnn.ptr --ptr-layer-number 4 \
-                          --lrate "D:0.08:0.5:0.2,0.2:8" \
+                          --lrate "D:0.08:0.5:0.2,0.2:8" --momentum 0.9 \
                           --wdir $working_dir --kaldi-output-file $working_dir/dnn.nnet || exit 1;
   touch $working_dir/dnn.fine.done
 fi

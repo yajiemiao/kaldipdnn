@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Apache 2.0
+# Copyright 2014     Yajie Miao   Carnegie Mellon University       Apache 2.0
 # This script trains CNN model over the filterbank features. It  is to be run
 # after run.sh. Before running this, you should already build the initial GMM
 # GMM model. This script requires a GPU, and also the "pdnn" toolkit to train

@@ -1,9 +1,10 @@
 #!/bin/bash
 
-# Apache 2.0
-# This  is the script that trains DNN system. It is to be run after run.sh. 
-# Before running this, you should already build the initial GMM model. This
-# script requires a GPU, and also the "pdnn" toolkit to train the DNN.
+# Copyright 2014    Yajie Miao  Carnegie Mellon University       Apache 2.0
+# This script trains DNN model by reading the Kaldi feature (.scp) and align-
+# ment (.ali) files directly. It is to be run after run.sh. Before running
+# this, you should already build the initial GMM model. This script requires
+# a GPU, and also the "pdnn" toolkit to train the DNN.
 
 # For more informaiton regarding the recipes and results, visit the webiste
 # http://www.cs.cmu.edu/~ymiao/kaldipdnn

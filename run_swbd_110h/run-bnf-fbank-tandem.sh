@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Apache 2.0
+# Copyright 2014    Yajie Miao  Carnegie Mellon University      Apache 2.0
 # This script  trains tandem systems using bottleneck features (BNFs). The 
 # BNF network is trained over fbank features. It is to be run after run.sh.
 # Before running this, you should already build the initial GMM model. This
