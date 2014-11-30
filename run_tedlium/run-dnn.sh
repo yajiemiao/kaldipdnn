@@ -9,8 +9,8 @@
 # For more informaiton regarding the recipes and results, visit the webiste
 # http://www.cs.cmu.edu/~ymiao/kaldipdnn
 
-working_dir=exp_pdnn_110h/dnn
-gmmdir=exp/tri4a
+working_dir=exp_pdnn/dnn
+gmmdir=exp/tri3
 
 # Specify the gpu device to be used
 gpu=gpu
@@ -56,72 +56,64 @@ mkdir -p $working_dir/log
 
 num_pdfs=`gmm-info $gmmdir/final.mdl | grep pdfs | awk '{print $NF}'` || exit 1;
 
-
 echo =====================================================================
-echo "                   Alignment & Feature Preparation                 "
+echo "           Data Split & Alignment & Feature Preparation            "
 echo =====================================================================
-# Alignment on the training and validation data
-if [ ! -d ${gmmdir}_ali_100k_nodup ]; then
-  steps/align_fmllr.sh --nj 24 --cmd "$train_cmd" \
-    data/train_100k_nodup data/lang $gmmdir ${gmmdir}_ali_100k_nodup || exit 1
+# Split training data into traing and cross-validation sets for DNN
+if [ ! -d data/train_tr95 ]; then
+  utils/subset_data_dir_tr_cv.sh --cv-spk-percent 5 data/train data/train_tr95 data/train_cv05 || exit 1
 fi
-if [ ! -d ${gmmdir}_ali_dev ]; then
-  steps/align_fmllr.sh --nj 12 --cmd "$train_cmd" \
-    data/train_dev data/lang $gmmdir ${gmmdir}_ali_dev || exit 1
-fi
-
-# Dump fMLLR features. "fake" cmvn states (0 means and 1 variance) which apply no normalization
-if [ ! -d $working_dir/data/train ]; then
-  steps/nnet/make_fmllr_feats.sh --nj 24 --cmd "$train_cmd" \
-    --transform-dir ${gmmdir}_ali_100k_nodup \
-    $working_dir/data/train data/train_100k_nodup $gmmdir $working_dir/_log $working_dir/_fmllr || exit 1
-  steps/compute_cmvn_stats.sh --fake \
-    $working_dir/data/train $working_dir/_log $working_dir/_fmllr || exit 1;
-fi
-if [ ! -d $working_dir/data/valid ]; then
-  steps/nnet/make_fmllr_feats.sh --nj 12 --cmd "$train_cmd" \
-    --transform-dir ${gmmdir}_ali_dev \
-    $working_dir/data/valid data/train_dev $gmmdir $working_dir/_log $working_dir/_fmllr || exit 1
-  steps/compute_cmvn_stats.sh --fake \
-    $working_dir/data/valid $working_dir/_log $working_dir/_fmllr || exit 1;
-fi
-if [ ! -d $working_dir/data/eval2000 ]; then
-  steps/nnet/make_fmllr_feats.sh --nj 12 --cmd "$train_cmd" \
-    --transform-dir $gmmdir/decode_eval2000_sw1_tg \
-    $working_dir/data/eval2000 data/eval2000 $gmmdir $working_dir/_log $working_dir/_fmllr || exit 1
-  steps/compute_cmvn_stats.sh --fake \
-    $working_dir/data/eval2000 $working_dir/_log $working_dir/_fmllr || exit 1;
-fi
+# Alignment on the training and validation data.
+for set in tr95 cv05; do
+  if [ ! -d ${gmmdir}_ali_$set ]; then
+    steps/align_fmllr.sh --nj 24 --cmd "$train_cmd" \
+      data/train_$set data/lang $gmmdir ${gmmdir}_ali_$set || exit 1
+  fi
+done
+# Dump fMLLR features. "Fake" cmvn states (0 means and 1 variance) are applied. 
+for set in tr95 cv05; do
+  if [ ! -d $working_dir/data/train_$set ]; then
+    steps/nnet/make_fmllr_feats.sh --nj 24 --cmd "$train_cmd" \
+      --transform-dir ${gmmdir}_ali_$set \
+      $working_dir/data/train_$set data/train_$set $gmmdir $working_dir/_log $working_dir/_fmllr || exit 1
+    steps/compute_cmvn_stats.sh --fake \
+      $working_dir/data/train_$set $working_dir/_log $working_dir/_fmllr || exit 1;
+  fi
+done
+for set in dev test; do
+  if [ ! -d $working_dir/data/$set ]; then
+    steps/nnet/make_fmllr_feats.sh --nj 8 --cmd "$train_cmd" \
+      --transform-dir $gmmdir/decode_$set \
+      $working_dir/data/$set data/$set $gmmdir $working_dir/_log $working_dir/_fmllr || exit 1
+    steps/compute_cmvn_stats.sh --fake \
+      $working_dir/data/$set $working_dir/_log $working_dir/_fmllr || exit 1;
+  fi
+done
 
 echo =====================================================================
 echo "               Training and Cross-Validation Pfiles                "
 echo =====================================================================
-# By default, DNN inputs include 11 frame of fMLLRs
-if [ ! -f $working_dir/train.pfile.done ]; then
-  steps_pdnn/build_nnet_pfile.sh --cmd "$train_cmd" --do-concat false \
-    --norm-vars false --splice-opts "--left-context=5 --right-context=5" \
-    $working_dir/data/train ${gmmdir}_ali_100k_nodup $working_dir || exit 1
-  touch $working_dir/train.pfile.done
-fi
-if [ ! -f $working_dir/valid.pfile.done ]; then
-  steps_pdnn/build_nnet_pfile.sh --cmd "$train_cmd" --do-concat false \
-    --norm-vars false --splice-opts "--left-context=5 --right-context=5" \
-    $working_dir/data/valid ${gmmdir}_ali_dev $working_dir || exit 1
-  touch $working_dir/valid.pfile.done
-fi
+# By default, DNN inputs include 11 frames of fMLLR
+for set in tr95 cv05; do
+  if [ ! -f $working_dir/${set}.pfile.done ]; then
+    steps_pdnn/build_nnet_pfile.sh --cmd "$train_cmd" --do-concat false \
+      --norm-vars false --splice-opts "--left-context=5 --right-context=5" \
+      $working_dir/data/train_$set ${gmmdir}_ali_$set $working_dir || exit 1
+    touch $working_dir/${set}.pfile.done
+  fi
+done
 
 echo =====================================================================
 echo "                  DNN Pre-training & Fine-tuning                   "
 echo =====================================================================
-feat_dim=$(gunzip -c $working_dir/train.pfile.1.gz |head |grep num_features| awk '{print $2}') || exit 1;
+feat_dim=$(gunzip -c $working_dir/train_tr95.pfile.1.gz |head |grep num_features| awk '{print $2}') || exit 1;
 
-# We use SDA because it's faster than RBM
 if [ ! -f $working_dir/dnn.ptr.done ]; then
   echo "SDA Pre-training"
   $cmd $working_dir/log/dnn.ptr.log \
     export PYTHONPATH=$PYTHONPATH:`pwd`/pdnn/ \; \
     export THEANO_FLAGS=mode=FAST_RUN,device=$gpu,floatX=float32 \; \
-    $pythonCMD pdnn/cmds/run_SdA.py --train-data "$working_dir/train.pfile.*.gz,partition=2000m,random=true,stream=true" \
+    $pythonCMD pdnn/cmds/run_SdA.py --train-data "$working_dir/train_tr95.pfile.*.gz,partition=2000m,random=true,stream=true" \
                                     --nnet-spec "$feat_dim:1024:1024:1024:1024:1024:1024:$num_pdfs" \
                                     --1stlayer-reconstruct-activation "tanh" \
                                     --wdir $working_dir --param-output-file $working_dir/dnn.ptr \
@@ -129,14 +121,13 @@ if [ ! -f $working_dir/dnn.ptr.done ]; then
   touch $working_dir/dnn.ptr.done
 fi
 
-# To apply dropout, add "--dropout-factor 0.2,0.2,0.2,0.2,0.2,0.2" and change the value of "--lrate" to "D:0.8:0.5:0.2,0.2:4"
 if [ ! -f $working_dir/dnn.fine.done ]; then
   echo "Fine-tuning DNN"
   $cmd $working_dir/log/dnn.fine.log \
     export PYTHONPATH=$PYTHONPATH:`pwd`/pdnn/ \; \
     export THEANO_FLAGS=mode=FAST_RUN,device=$gpu,floatX=float32 \; \
-    $pythonCMD pdnn/cmds/run_DNN.py --train-data "$working_dir/train.pfile.*.gz,partition=2000m,random=true,stream=true" \
-                                    --valid-data "$working_dir/valid.pfile.*.gz,partition=600m,random=true,stream=true" \
+    $pythonCMD pdnn/cmds/run_DNN.py --train-data "$working_dir/train_tr95.pfile.*.gz,partition=2000m,random=true,stream=true" \
+                                    --valid-data "$working_dir/train_cv05.pfile.*.gz,partition=600m,random=true,stream=true" \
                                     --nnet-spec "$feat_dim:1024:1024:1024:1024:1024:1024:$num_pdfs" \
                                     --ptr-file $working_dir/dnn.ptr --ptr-layer-number 6 \
                                     --lrate "D:0.08:0.5:0.2,0.2:8" \
@@ -149,9 +140,11 @@ echo "                           Decoding                                "
 echo =====================================================================
 if [ ! -f  $working_dir/decode.done ]; then
   cp $gmmdir/final.mdl $working_dir || exit 1;  # copy final.mdl for scoring
-  graph_dir=$gmmdir/graph_sw1_tg
-  steps_pdnn/decode_dnn.sh --nj 24 --scoring-opts "--min-lmwt 7 --max-lmwt 18" --cmd "$decode_cmd" \
-     $graph_dir $working_dir/data/eval2000 ${gmmdir}_ali_100k_nodup $working_dir/decode_eval2000_sw1_tg || exit 1;
+  graph_dir=$gmmdir/graph
+  steps_pdnn/decode_dnn.sh --nj 8 --scoring-opts "--min-lmwt 7 --max-lmwt 18" --cmd "$decode_cmd" \
+    $graph_dir $working_dir/data/dev ${gmmdir}_ali_tr95 $working_dir/decode_dev || exit 1;
+  steps_pdnn/decode_dnn.sh --nj 11 --scoring-opts "--min-lmwt 7 --max-lmwt 18" --cmd "$decode_cmd" \
+    $graph_dir $working_dir/data/test ${gmmdir}_ali_tr95 $working_dir/decode_test || exit 1;
   touch $working_dir/decode.done
 fi
 

@@ -240,4 +240,30 @@ if [ ! -f $working_dir/sgmm.done ]; then
   touch $working_dir/sgmm.done
 fi
 
+echo =====================================================================
+echo "                        MMI-SGMM over BNFs                         "
+echo =====================================================================
+# Now discriminatively train the SGMM system
+if [ ! -f $working_dir/mmi.sgmm.done ]; then
+  steps/align_sgmm2.sh --nj 30 --cmd "$train_cmd" \
+    $datadir/train data/lang ${working_dir}/sgmm5a ${working_dir}/sgmm5a_ali || exit 1;
+
+  # Reduce the beam down to 10 to get acceptable decoding speed.
+  steps/make_denlats_sgmm2.sh --nj 30 --beam 9.0 --lattice-beam 6 --cmd "$decode_cmd" $denlats_param \
+    $datadir/train data/lang ${working_dir}/sgmm5a ${working_dir}/sgmm5a_denlats || exit 1;
+
+  steps/train_mmi_sgmm2.sh --cmd "$decode_cmd" --boost 0.1 \
+    $datadir/train data/lang $working_dir/sgmm5a_{ali,denlats} ${working_dir}/sgmm5a_mmi_b0.1 || exit 1;
+
+  for iter in 1 2 3 4; do
+    steps/decode_sgmm2_rescore.sh --cmd "$decode_cmd" --iter $iter \
+      data/lang_test_bd_tgpr $datadir/dev93 ${working_dir}/sgmm5a/decode_bd_tgpr_dev93 \
+      ${working_dir}/sgmm5a_mmi_b0.1/decode_bd_tgpr_dev93_it$iter || exit 1;
+    steps/decode_sgmm2_rescore.sh --cmd "$decode_cmd" --iter $iter \
+      data/lang_test_bd_tgpr $datadir/eval92 ${working_dir}/sgmm5a/decode_bd_tgpr_eval92 \
+      ${working_dir}/sgmm5a_mmi_b0.1/decode_bd_tgpr_eval92_it$iter || exit 1;
+  done
+  touch $working_dir/mmi.sgmm.done
+fi
+
 echo "Finish !!"

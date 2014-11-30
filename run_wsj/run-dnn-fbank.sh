@@ -86,7 +86,7 @@ done
 
 for set in dev93 eval92; do
   if [ ! -d $working_dir/data/$set ]; then
-    cp -r data/$set $working_dir/data/$set
+    cp -r data/test_$set $working_dir/data/$set
     ( cd $working_dir/data/$set; rm -rf {cmvn,feats}.scp split*; )
     steps/make_fbank.sh --cmd "$train_cmd" --nj 8 $working_dir/data/$set $working_dir/_log $working_dir/_fbank || exit 1;
     steps/compute_cmvn_stats.sh $working_dir/data/$set $working_dir/_log $working_dir/_fbank || exit 1;
@@ -118,7 +118,7 @@ if [ ! -f $working_dir/dnn.ptr.done ]; then
     export THEANO_FLAGS=mode=FAST_RUN,device=$gpu,floatX=float32 \; \
     $pythonCMD pdnn/cmds/run_SdA.py --train-data "$working_dir/train_tr95.pfile.*.gz,partition=2000m,random=true,stream=false" \
                                     --nnet-spec "$feat_dim:1024:1024:1024:1024:1024:1024:$num_pdfs" \
-                                    --1stlayer-reconstruct-activation "tanh" --momentum 0.9 \
+                                    --1stlayer-reconstruct-activation "tanh" \
                                     --wdir $working_dir --param-output-file $working_dir/dnn.ptr \
                                     --ptr-layer-number 6 --epoch-number 5 || exit 1;
   touch $working_dir/dnn.ptr.done

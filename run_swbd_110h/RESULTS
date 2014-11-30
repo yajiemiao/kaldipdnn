@@ -25,7 +25,5 @@
 %WER 21.7 | 1831 21395 | 80.8 13.2 6.0 2.5 21.7 60.0 | exp_pdnn_110h/dnn_fbank/decode_eval2000_sw1_tg/score_10/eval2000.ctm.swbd.filt.sys
 %WER 28.2 | 4459 42989 | 74.7 17.4 8.0 2.9 28.2 65.2 | exp_pdnn_110h/dnn_fbank/decode_eval2000_sw1_tg/score_10/eval2000.ctm.filt.sys
 
-# run-cnn.sh. It outperforms run-dnn-fbank (which uses the same feature type), but still it's behind run-dnn
-%WER 19.6 | 1831 21395 | 82.2 11.8 5.9 1.8 19.6 57.3 | exp_pdnn_110h/cnn/decode_eval2000_sw1_tg/score_11/eval2000.ctm.swbd.filt.sys
-%WER 26.3 | 4459 42989 | 76.3 16.2 7.5 2.6 26.3 63.8 | exp_pdnn_110h/cnn/decode_eval2000_sw1_tg/score_10/eval2000.ctm.filt.sys
+# run-cnn.sh. 
 

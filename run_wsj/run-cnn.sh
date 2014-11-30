@@ -159,14 +159,17 @@ done
 echo =====================================================================
 echo "                           Decoding                                "
 echo =====================================================================
+# In decoding, we take the convolution-layer activation as inputs and the 
+# fully-connected layers as the DNN model. So we set --norm-vars, --add-deltas
+# and --splice-opts accordingly.
 if [ ! -f  $working_dir/decode.done ]; then
   cp $gmmdir/final.mdl $working_dir || exit 1;  # copy final.mdl for scoring
   graph_dir=$gmmdir/graph_bd_tgpr
   steps_pdnn/decode_dnn.sh --nj 10 --scoring-opts "--min-lmwt 7 --max-lmwt 18" --cmd "$decode_cmd" \
-    --splice-opts "--left-context=0 --right-context=0" \
+    --norm-vars false --add-deltas false --splice-opts "--left-context=0 --right-context=0" \
     $graph_dir $working_dir/data_conv/dev93 ${gmmdir}_ali_tr95 $working_dir/decode_bd_tgpr_dev93 || exit 1;
   steps_pdnn/decode_dnn.sh --nj 8 --scoring-opts "--min-lmwt 7 --max-lmwt 18" --cmd "$decode_cmd" \
-    --splice-opts "--left-context=0 --right-context=0" \
+    --norm-vars false --add-deltas false --splice-opts "--left-context=0 --right-context=0" \
     $graph_dir $working_dir/data_conv/eval92 ${gmmdir}_ali_tr95 $working_dir/decode_bd_tgpr_eval92 || exit 1;
   touch $working_dir/decode.done
 fi

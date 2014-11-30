@@ -96,6 +96,9 @@ if [ ! -d $working_dir/data/eval2000 ]; then
   steps/compute_cmvn_stats.sh $working_dir/data/eval2000 $working_dir/_log $working_dir/_fbank || exit 1;
 fi
 
+echo =====================================================================
+echo "               Training and Cross-Validation Pfiles                "
+echo =====================================================================
 # By default, inputs include 11 frames of filterbanks
 if [ ! -f $working_dir/train.pfile.done ]; then
   steps_pdnn/build_nnet_pfile.sh --cmd "$train_cmd" --do-concat false \
@@ -115,6 +118,7 @@ echo "                  DNN Pre-training & Fine-tuning                   "
 echo =====================================================================
 feat_dim=$(gunzip -c $working_dir/train.pfile.1.gz |head |grep num_features| awk '{print $2}') || exit 1;
 
+# We use SDA because it's faster than RBM
 if [ ! -f $working_dir/dnn.ptr.done ]; then
   echo "SDA Pre-training"
   $cmd $working_dir/log/dnn.ptr.log \
@@ -135,7 +139,7 @@ if [ ! -f $working_dir/dnn.fine.done ]; then
     export PYTHONPATH=$PYTHONPATH:`pwd`/pdnn/ \; \
     export THEANO_FLAGS=mode=FAST_RUN,device=$gpu,floatX=float32 \; \
     $pythonCMD pdnn/cmds/run_DNN.py --train-data "$working_dir/train.pfile.*.gz,partition=2000m,random=true,stream=true" \
-                                    --valid-data "$working_dir/dev.pfile.*.gz,partition=600m,random=true,stream=true" \
+                                    --valid-data "$working_dir/valid.pfile.*.gz,partition=600m,random=true,stream=true" \
                                     --nnet-spec "$feat_dim:1024:1024:1024:1024:1024:1024:$num_pdfs" \
                                     --ptr-file $working_dir/dnn.ptr --ptr-layer-number 6 \
                                     --lrate "D:0.08:0.5:0.2,0.2:8" \

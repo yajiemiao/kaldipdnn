@@ -115,6 +115,7 @@ echo "                  DNN Pre-training & Fine-tuning                   "
 echo =====================================================================
 feat_dim=$(gunzip -c $working_dir/train.pfile.1.gz |head |grep num_features| awk '{print $2}') || exit 1;
 
+# We use SDA because it's faster than RBM
 if [ ! -f $working_dir/dnn.ptr.done ]; then
   echo "SDA Pre-training"
   $cmd $working_dir/log/dnn.ptr.log \
@@ -134,7 +135,7 @@ if [ ! -f $working_dir/dnn.fine.done ]; then
     export PYTHONPATH=$PYTHONPATH:`pwd`/pdnn/ \; \
     export THEANO_FLAGS=mode=FAST_RUN,device=$gpu,floatX=float32 \; \
     $pythonCMD pdnn/cmds/run_DNN.py --train-data "$working_dir/train.pfile.*.gz,partition=2000m,random=true,stream=true" \
-                                    --valid-data "$working_dir/dev.pfile.*.gz,partition=600m,random=true,stream=true" \
+                                    --valid-data "$working_dir/valid.pfile.*.gz,partition=600m,random=true,stream=true" \
                                     --nnet-spec "$feat_dim:1024:1024:1024:1024:42:1024:$num_pdfs" \
                                     --ptr-file $working_dir/dnn.ptr --ptr-layer-number 4 \
                                     --lrate "D:0.08:0.5:0.2,0.2:8" \
@@ -150,7 +151,7 @@ echo =====================================================================
 # Dump BNF features
 for set in train eval2000; do
   if [ ! -d $working_dir/data_bnf/${set} ]; then
-    steps_pdnn/make_bnf_feat.sh --nj 24 --cmd "$train_cmd" --norm-vars false \
+    steps_pdnn/make_bnf_feat.sh --nj 24 --cmd "$train_cmd" \
       $working_dir/data_bnf/${set} $working_dir/data/${set} $working_dir $working_dir/_log $working_dir/_bnf || exit 1
     # We will normalize BNF features, thus are not providing --fake here. Intuitively, apply CMN over BNF features 
     # might be redundant. But our experiments on WSJ show gains by doing this.
@@ -159,51 +160,95 @@ for set in train eval2000; do
   fi
 done
 
+# Redirect datadir pointing to the BNF dir
 datadir=$working_dir/data_bnf
 
-echo ---------------------------------------------------------------------
-echo "Build LDA+MLLT and MMI systems over bottleneck features"
-echo ---------------------------------------------------------------------
-decode_param="--beam 15.0 --latbeam 7.0 --acwt 0.04" # Note the decoding 
-                                   # parameters differ from MFCC systems
+echo =====================================================================
+echo "                    LDA+MLLT Systems over BNFs                     "
+echo =====================================================================
+decode_param="--beam 15.0 --latbeam 7.0 --acwt 0.04" # decoding parameters differ from MFCC systems
 scoring_opts="--min-lmwt 26 --max-lmwt 34"
-denlats_param="--acwt 0.05"   # Parameters for lattice generation
+denlats_param="--acwt 0.05"                        # Parameters for lattice generation
 
+# LDA+MLLT systems building and decoding
 if [ ! -f $working_dir/lda.mllt.done ]; then
-  echo "Training LDA+MLLT"
   steps/train_lda_mllt.sh --cmd "$train_cmd" \
-    5500 90000 $datadir/train data/lang ${gmmdir}_ali_100k_nodup $working_dir/tri5a || exit 1;
+    5500 90000 $datadir/train data/lang ${gmmdir}_ali_100k_nodup $working_dir/tri4a || exit 1;
 
-  echo "Decoding LDA+MLLT"
-  graph_dir=$working_dir/tri5a/graph_sw1_tg
+  graph_dir=$working_dir/tri4a/graph_sw1_tg
   $mkgraph_cmd $graph_dir/mkgraph.log \
-    utils/mkgraph.sh data/lang_sw1_tg $working_dir/tri5a $graph_dir || exit 1;
+    utils/mkgraph.sh data/lang_sw1_tg $working_dir/tri4a $graph_dir || exit 1;
   steps/decode.sh --nj 24 --cmd "$decode_cmd" $decode_param --scoring-opts "$scoring_opts" \
-      $graph_dir $datadir/eval2000 $working_dir/tri5a/decode_eval2000_sw1_tg || exit 1;
+      $graph_dir $datadir/eval2000 $working_dir/tri4a/decode_eval2000_sw1_tg || exit 1;
+
   touch $working_dir/lda.mllt.done
 fi
 
+echo =====================================================================
+echo "                      MMI Systems over BNFs                        "
+echo =====================================================================
+# MMI systems building and decoding
 if [ ! -f $working_dir/mmi.done ]; then
-  echo "Generating num alignment and den lats"
   steps/align_si.sh --nj 24 --cmd "$train_cmd" \
-    $datadir/train data/lang ${working_dir}/tri5a ${working_dir}/tri5a_ali || exit 1;
+    $datadir/train data/lang ${working_dir}/tri4a ${working_dir}/tri4a_ali || exit 1;
 
   steps/make_denlats.sh --nj 24 --cmd "$decode_cmd" $denlats_param \
-    $datadir/train data/lang ${working_dir}/tri5a ${working_dir}/tri5a_denlats || exit 1;
+    $datadir/train data/lang ${working_dir}/tri4a ${working_dir}/tri4a_denlats || exit 1;
 
-  echo "Training bMMI"
   # 4 iterations of MMI
   num_mmi_iters=4
   steps/train_mmi.sh --cmd "$train_cmd" --boost 0.1 --num-iters $num_mmi_iters \
-    $datadir/train data/lang $working_dir/tri5a_{ali,denlats} $working_dir/tri5a_mmi_b0.1 || exit 1;
+    $datadir/train data/lang $working_dir/tri4a_{ali,denlats} $working_dir/tri4a_mmi_b0.1 || exit 1;
 
   for iter in 1 2 3 4; do
-    echo "Decoding bMMI iteration $iter"
-    graph_dir=$working_dir/tri5a/graph_sw1_tg
+    graph_dir=$working_dir/tri4a/graph_sw1_tg
     steps/decode.sh --nj 24 --cmd "$decode_cmd" $decode_param --scoring-opts "$scoring_opts" --iter $iter \
-      $graph_dir $datadir/eval2000 ${working_dir}/tri5a_mmi_b0.1/decode_eval2000_sw1_tg_it$iter || exit 1;
+      $graph_dir $datadir/eval2000 ${working_dir}/tri4a_mmi_b0.1/decode_eval2000_sw1_tg_it$iter || exit 1;
   done
   touch $working_dir/mmi.done
 fi
 
+echo =====================================================================
+echo "                      SGMM Systems over BNFs                       "
+echo =====================================================================
+# SGMM system building and decoding
+if [ ! -f $working_dir/sgmm.done ]; then
+  steps/train_ubm.sh --cmd "$train_cmd" \
+    700 $datadir/train data/lang ${working_dir}/tri4a_ali ${working_dir}/ubm5a || exit 1;
+
+  steps/train_sgmm2.sh --cmd "$train_cmd" 9000 30000 \
+    $datadir/train data/lang ${working_dir}/tri4a_ali ${working_dir}/ubm5a/final.ubm ${working_dir}/sgmm2_5a || exit 1;
+
+  graph_dir=$working_dir/sgmm2_5a/graph_sw1_tg
+  $decode_cmd $graph_dir/mkgraph.log \
+    utils/mkgraph.sh data/lang_sw1_tg ${working_dir}/sgmm2_5a $graph_dir || exit 1;
+
+  steps/decode_sgmm2.sh --nj 24 --cmd "$decode_cmd" --config conf/decode.config --acwt 0.04 --scoring-opts "$scoring_opts" \
+    $graph_dir data/eval2000 ${working_dir}/sgmm2_5a/decode_eval2000_sw1_tg || exit 1;
+  touch $working_dir/sgmm.done
+fi
+
+
+echo =====================================================================
+echo "                        MMI-SGMM over BNFs                         "
+echo =====================================================================
+# Now discriminatively train the SGMM system
+if [ ! -f $working_dir/mmi.sgmm.done ]; then
+  steps/align_sgmm2.sh --nj 50 --cmd "$train_cmd" \
+    $datadir/train data/lang ${working_dir}/sgmm2_5a ${working_dir}/sgmm2_5a_ali || exit 1;
+
+  # Reduce the beam down to 10 to get acceptable decoding speed.
+  steps/make_denlats_sgmm2.sh --nj 50 --beam 9.0 --lattice-beam 6 --cmd "$decode_cmd" $denlats_param \
+    $datadir/train data/lang ${working_dir}/sgmm2_5a ${working_dir}/sgmm2_5a_denlats || exit 1;
+
+  steps/train_mmi_sgmm2.sh --cmd "$decode_cmd" --boost 0.1 \
+    $datadir/train data/lang $working_dir/sgmm2_5a_{ali,denlats} ${working_dir}/sgmm2_5a_mmi_b0.1 || exit 1;
+
+  for iter in 1 2 3 4; do
+    steps/decode_sgmm2_rescore.sh --cmd "$decode_cmd" --iter $iter \
+      data/lang_sw1_tg $datadir/eval2000 ${working_dir}/sgmm2_5a/decode_eval2000_sw1_tg \
+      ${working_dir}/sgmm2_5a_mmi_b0.1/decode_eval2000_sw1_tg_it$iter || exit 1;
+  done
+  touch $working_dir/mmi.sgmm.done
+fi
 echo "Finish !! "

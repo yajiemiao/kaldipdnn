@@ -4,7 +4,6 @@
 %WER 9.39 [ 773 / 8234, 103 ins, 108 del, 562 sub ] exp/tri4b/decode_bd_tgpr_dev93/wer_16
 %WER 6.15 [ 347 / 5643, 66 ins, 25 del, 256 sub ] exp/tri4b/decode_bd_tgpr_eval92/wer_14
 
-# below are results of the pdnn recipes
 
 # run-dnn.sh
 %WER 7.18 [ 591 / 8234, 74 ins, 92 del, 425 sub ] exp_pdnn/dnn/decode_bd_tgpr_dev93/wer_11
@@ -23,22 +22,10 @@
 %WER 3.88 [ 219 / 5643, 25 ins, 13 del, 181 sub ] exp_pdnn/bnf_tandem/tri5a_mmi_b0.1/decode_bd_tgpr_eval92_it3/wer_31
 %WER 3.81 [ 215 / 5643, 22 ins, 13 del, 180 sub ] exp_pdnn/bnf_tandem/tri5a_mmi_b0.1/decode_bd_tgpr_eval92_it4/wer_32
 
-# run-bnf-tandem.sh -- apply NO normalization over BNF
-%WER 8.03 [ 661 / 8234, 88 ins, 99 del, 474 sub ] exp_pdnn/bnf_tandem/tri5a/decode_bd_tgpr_dev93/wer_34
-%WER 4.45 [ 251 / 5643, 29 ins, 20 del, 202 sub ] exp_pdnn/bnf_tandem/tri5a/decode_bd_tgpr_eval92/wer_34
-%WER 7.57 [ 623 / 8234, 75 ins, 99 del, 449 sub ] exp_pdnn/bnf_tandem/tri5a_mmi_b0.1/decode_bd_tgpr_dev93_it1/wer_33
-%WER 7.34 [ 604 / 8234, 70 ins, 106 del, 428 sub ] exp_pdnn/bnf_tandem/tri5a_mmi_b0.1/decode_bd_tgpr_dev93_it2/wer_33
-%WER 7.13 [ 587 / 8234, 66 ins, 100 del, 421 sub ] exp_pdnn/bnf_tandem/tri5a_mmi_b0.1/decode_bd_tgpr_dev93_it3/wer_32
-%WER 7.10 [ 585 / 8234, 62 ins, 107 del, 416 sub ] exp_pdnn/bnf_tandem/tri5a_mmi_b0.1/decode_bd_tgpr_dev93_it4/wer_34
-%WER 4.18 [ 236 / 5643, 25 ins, 18 del, 193 sub ] exp_pdnn/bnf_tandem/tri5a_mmi_b0.1/decode_bd_tgpr_eval92_it1/wer_32
-%WER 4.04 [ 228 / 5643, 25 ins, 18 del, 185 sub ] exp_pdnn/bnf_tandem/tri5a_mmi_b0.1/decode_bd_tgpr_eval92_it2/wer_30
-%WER 3.95 [ 223 / 5643, 26 ins, 15 del, 182 sub ] exp_pdnn/bnf_tandem/tri5a_mmi_b0.1/decode_bd_tgpr_eval92_it3/wer_26
-%WER 4.06 [ 229 / 5643, 27 ins, 17 del, 185 sub ] exp_pdnn/bnf_tandem/tri5a_mmi_b0.1/decode_bd_tgpr_eval92_it4/wer_29
-
-# run-bnf-dnn.sh -- +/-4; apply normalization over BNF. It's even worse than run-dnn.sh !!!
-%WER 7.15 [ 589 / 8234, 62 ins, 100 del, 427 sub ] exp_pdnn/bnf_dnn/decode_bd_tgpr_dev93/wer_11
-%WER 4.36 [ 246 / 5643, 30 ins, 18 del, 198 sub ] exp_pdnn/bnf_dnn/decode_bd_tgpr_eval92/wer_10
-
 # run-dnn-fbank.sh
 %WER 7.38 [ 608 / 8234, 80 ins, 90 del, 438 sub ] exp_pdnn/dnn_fbank/decode_bd_tgpr_dev93/wer_10
 %WER 4.27 [ 241 / 5643, 36 ins, 14 del, 191 sub ] exp_pdnn/dnn_fbank/decode_bd_tgpr_eval92/wer_9
+
+# run-cnn.sh
+
+

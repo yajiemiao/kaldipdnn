@@ -22,22 +22,18 @@
 # --------------------------------------------------------------------------------------------------------------
 # run-bnf-tandem.sh : Tandem Systems with BNFs Trained on fMLLRs
 # --------------------------------------------------------------------------------------------------------------
-# run-bnf-tandem.sh
 # LDA+MLLT
 %WER 16.8 | 400 15057 | 85.5 11.2 3.3 2.4 16.8 99.3 | -1.195 | exp_pdnn/bnf_tandem/tri4/decode_dev/score_11/ctm_39phn.filt.sys
 %WER 18.5 | 192 7215 | 84.1 12.1 3.9 2.6 18.5 99.5 | -1.223 | exp_pdnn/bnf_tandem/tri4/decode_test/score_12/ctm_39phn.filt.sys
 # MMI
 %WER 16.7 | 400 15057 | 85.8 11.0 3.2 2.5 16.7 99.0 | -1.188 | exp_pdnn/bnf_tandem/tri4_mmi_b0.1/decode_dev_it1/score_11/ctm_39phn.filt.sys
-%WER 16.8 | 400 15057 | 85.7 11.2 3.2 2.5 16.8 99.0 | -1.119 | exp_pdnn/bnf_tandem/tri4_mmi_b0.1/decode_dev_it2/score_12/ctm_39phn.filt.sys
-%WER 17.0 | 400 15057 | 85.6 11.3 3.1 2.7 17.0 99.0 | -1.085 | exp_pdnn/bnf_tandem/tri4_mmi_b0.1/decode_dev_it3/score_12/ctm_39phn.filt.sys
-%WER 17.2 | 400 15057 | 85.5 11.4 3.0 2.8 17.2 98.8 | -1.053 | exp_pdnn/bnf_tandem/tri4_mmi_b0.1/decode_dev_it4/score_12/ctm_39phn.filt.sys
 %WER 18.4 | 192 7215 | 84.3 12.0 3.7 2.8 18.4 99.5 | -1.191 | exp_pdnn/bnf_tandem/tri4_mmi_b0.1/decode_test_it1/score_12/ctm_39phn.filt.sys
-%WER 18.6 | 192 7215 | 84.7 12.1 3.3 3.3 18.6 100.0 | -1.297 | exp_pdnn/bnf_tandem/tri4_mmi_b0.1/decode_test_it2/score_10/ctm_39phn.filt.sys
-%WER 18.6 | 192 7215 | 84.6 12.1 3.3 3.3 18.6 100.0 | -1.227 | exp_pdnn/bnf_tandem/tri4_mmi_b0.1/decode_test_it3/score_11/ctm_39phn.filt.sys
-%WER 18.7 | 192 7215 | 84.6 12.0 3.4 3.3 18.7 100.0 | -1.144 | exp_pdnn/bnf_tandem/tri4_mmi_b0.1/decode_test_it4/score_12/ctm_39phn.filt.sys
 # SGMM
 %WER 16.3 | 400 15057 | 85.7 10.8 3.5 2.0 16.3 99.0 | -1.114 | exp_pdnn/bnf_tandem/sgmm5a/decode_dev/score_9/ctm_39phn.filt.sys
 %WER 17.8 | 192 7215 | 84.2 11.4 4.4 2.0 17.8 100.0 | -0.978 | exp_pdnn/bnf_tandem/sgmm5a/decode_test/score_12/ctm_39phn.filt.sys
+# MMI-SGMM
+%WER 16.5 | 400 15057 | 86.0 10.9 3.2 2.5 16.5 98.8 | -1.119 | exp_pdnn/bnf_tandem/sgmm5a_mmi_b0.1/decode_dev_it1/score_10/ctm_39phn.filt.sys
+%WER 17.9 | 192 7215 | 85.1 11.6 3.3 3.0 17.9 99.0 | -1.303 | exp_pdnn/bnf_tandem/sgmm5a_mmi_b0.1/decode_test_it1/score_8/ctm_39phn.filt.sys
 
 # --------------------------------------------------------------------------------------------------------------
 # run-dnn-fbank.sh : DNN Models over filterbank features

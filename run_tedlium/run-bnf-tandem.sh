@@ -63,10 +63,10 @@ echo =====================================================================
 if [ ! -d data/train_tr95 ]; then
   utils/subset_data_dir_tr_cv.sh --cv-spk-percent 5 data/train data/train_tr95 data/train_cv05 || exit 1
 fi
-# Alignment on the training and validation data
+# Alignment on the training and validation data. 
 for set in tr95 cv05; do
   if [ ! -d ${gmmdir}_ali_$set ]; then
-    steps/align_fmllr.sh --nj 16 --cmd "$train_cmd" \
+    steps/align_fmllr.sh --nj 24 --cmd "$train_cmd" \
       data/train_$set data/lang $gmmdir ${gmmdir}_ali_$set || exit 1
   fi
 done
@@ -74,7 +74,7 @@ done
 # Dump fMLLR features. "Fake" cmvn states (0 means and 1 variance) are applied. 
 for set in tr95 cv05; do
   if [ ! -d $working_dir/data/train_$set ]; then
-    steps/nnet/make_fmllr_feats.sh --nj 16 --cmd "$train_cmd" \
+    steps/nnet/make_fmllr_feats.sh --nj 24 --cmd "$train_cmd" \
       --transform-dir ${gmmdir}_ali_$set \
       $working_dir/data/train_$set data/train_$set $gmmdir $working_dir/_log $working_dir/_fmllr || exit 1
     steps/compute_cmvn_stats.sh --fake \
@@ -83,7 +83,7 @@ for set in tr95 cv05; do
 done
 for set in dev test; do
   if [ ! -d $working_dir/data/$set ]; then
-    steps/nnet/make_fmllr_feats.sh --nj 10 --cmd "$train_cmd" \
+    steps/nnet/make_fmllr_feats.sh --nj 8 --cmd "$train_cmd" \
       --transform-dir $gmmdir/decode_$set \
       $working_dir/data/$set data/$set $gmmdir $working_dir/_log $working_dir/_fmllr || exit 1
     steps/compute_cmvn_stats.sh --fake \
@@ -97,31 +97,28 @@ echo =====================================================================
 # By default, DNN inputs include 11 frames of fMLLR
 for set in tr95 cv05; do
   if [ ! -f $working_dir/${set}.pfile.done ]; then
-    steps_pdnn/build_nnet_pfile.sh --cmd "$train_cmd" --norm-vars false \
-      --splice-opts "--left-context=5 --right-context=5" \
+    steps_pdnn/build_nnet_pfile.sh --cmd "$train_cmd" --do-concat false \
+      --norm-vars false --splice-opts "--left-context=5 --right-context=5" \
       $working_dir/data/train_$set ${gmmdir}_ali_$set $working_dir || exit 1
-    ( cd $working_dir; mv concat.pfile ${set}.pfile; gzip ${set}.pfile; )
     touch $working_dir/${set}.pfile.done
   fi
 done
-# Rename pfiles to keep consistency
-( cd $working_dir;
-  ln -s tr95.pfile.gz train.pfile.gz; ln -s cv05.pfile.gz valid.pfile.gz
-)
 
 echo =====================================================================
 echo "                  DNN Pre-training & Fine-tuning                   "
 echo =====================================================================
-feat_dim=$(gunzip -c $working_dir/train.pfile.gz |head |grep num_features| awk '{print $2}') || exit 1;
+feat_dim=$(gunzip -c $working_dir/train_tr95.pfile.1.gz |head |grep num_features| awk '{print $2}') || exit 1;
 
 if [ ! -f $working_dir/dnn.ptr.done ]; then
-  echo "RBM Pre-training"
+  echo "SDA Pre-training"
   $cmd $working_dir/log/dnn.ptr.log \
     export PYTHONPATH=$PYTHONPATH:`pwd`/pdnn/ \; \
     export THEANO_FLAGS=mode=FAST_RUN,device=$gpu,floatX=float32 \; \
-    $pythonCMD pdnn/cmds/run_RBM.py --train-data "$working_dir/train.pfile.gz,partition=1000m,random=true,stream=false" \
-                               --nnet-spec "$feat_dim:1024:1024:1024:42:1024:$num_pdfs" --wdir $working_dir \
-                               --ptr-layer-number 5 --param-output-file $working_dir/dnn.ptr || exit 1;
+    $pythonCMD pdnn/cmds/run_SdA.py --train-data "$working_dir/train_tr95.pfile.*.gz,partition=2000m,random=true,stream=false" \
+                                    --nnet-spec "$feat_dim:1024:1024:1024:1024:42:1024:$num_pdfs" \
+                                    --1stlayer-reconstruct-activation "tanh" \
+                                    --wdir $working_dir --param-output-file $working_dir/dnn.ptr \
+                                    --ptr-layer-number 4 --epoch-number 5 || exit 1;
   touch $working_dir/dnn.ptr.done
 fi
 
@@ -130,12 +127,12 @@ if [ ! -f $working_dir/dnn.fine.done ]; then
   $cmd $working_dir/log/dnn.fine.log \
     export PYTHONPATH=$PYTHONPATH:`pwd`/pdnn/ \; \
     export THEANO_FLAGS=mode=FAST_RUN,device=$gpu,floatX=float32 \; \
-    $pythonCMD pdnn/cmds/run_DNN.py --train-data "$working_dir/train.pfile.gz,partition=1000m,random=true,stream=false" \
-                          --valid-data "$working_dir/valid.pfile.gz,partition=200m,random=true,stream=false" \
-                          --nnet-spec "$feat_dim:1024:1024:1024:42:1024:$num_pdfs" \
-                          --ptr-file $working_dir/dnn.ptr --ptr-layer-number 5 \
-                          --lrate "D:0.08:0.5:0.2,0.2:8" \
-                          --wdir $working_dir --kaldi-output-file $working_dir/dnn.nnet || exit 1;
+    $pythonCMD pdnn/cmds/run_DNN.py --train-data "$working_dir/train_tr95.pfile.*.gz,partition=2000m,random=true,stream=false" \
+                                    --valid-data "$working_dir/train_cv05.pfile.*.gz,partition=600m,random=true,stream=false" \
+                                    --nnet-spec "$feat_dim:1024:1024:1024:1024:42:1024:$num_pdfs" \
+                                    --ptr-file $working_dir/dnn.ptr --ptr-layer-number 4 \
+                                    --lrate "D:0.08:0.5:0.2,0.2:8" \
+                                    --wdir $working_dir --kaldi-output-file $working_dir/dnn.nnet || exit 1;
   touch $working_dir/dnn.fine.done
 fi
 
@@ -149,9 +146,19 @@ if [ ! -d $working_dir/data/train ]; then
   utils/combine_data.sh $working_dir/data/train $working_dir/data/train_tr95 $working_dir/data/train_cv05
 fi
 # Dump BNF features
-for set in train dev test; do
+for set in train; do
   if [ ! -d $working_dir/data_bnf/${set} ]; then
-    steps_pdnn/make_bnf_feat.sh --nj 16 --cmd "$train_cmd"  \
+    steps_pdnn/make_bnf_feat.sh --nj 24 --cmd "$train_cmd" \
+      $working_dir/data_bnf/${set} $working_dir/data/${set} $working_dir $working_dir/_log $working_dir/_bnf || exit 1
+    # We will normalize BNF features, thus are not providing --fake here. Intuitively, apply CMN over BNF features 
+    # might be redundant. But our experiments on WSJ show gains by doing this.
+    steps/compute_cmvn_stats.sh \
+      $working_dir/data_bnf/${set} $working_dir/_log $working_dir/_bnf || exit 1;
+  fi
+done
+for set in dev test; do
+  if [ ! -d $working_dir/data_bnf/${set} ]; then
+    steps_pdnn/make_bnf_feat.sh --nj 8 --cmd "$train_cmd" \
       $working_dir/data_bnf/${set} $working_dir/data/${set} $working_dir $working_dir/_log $working_dir/_bnf || exit 1
     # We will normalize BNF features, thus are not providing --fake here. Intuitively, apply CMN over BNF features 
     # might be redundant. But our experiments on WSJ show gains by doing this.
@@ -166,21 +173,21 @@ datadir=$working_dir/data_bnf
 echo =====================================================================
 echo "                    LDA+MLLT Systems over BNFs                     "
 echo =====================================================================
-decode_param="--beam 15.0 --lattice-beam 7.0 --acwt 0.125" # decoding parameters differ from MFCC systems
-scoring_opts="--min-lmwt 7 --max-lmwt 14"
-denlats_param="--acwt 0.1"                            # Parameters for lattice generation
+decode_param="--beam 15.0 --lattice-beam 7.0 --acwt 0.04" # decoding parameters differ from MFCC systems
+scoring_opts="--min-lmwt 26 --max-lmwt 34"
+denlats_param="--acwt 0.05"                            # Parameters for lattice generation
 
 # LDA+MLLT systems building and decoding
 if [ ! -f $working_dir/lda.mllt.done ]; then
   steps/train_lda_mllt.sh --cmd "$train_cmd" \
-    2500 15000 $datadir/train data/lang ${gmmdir}_ali $working_dir/tri4 || exit 1;
+    5000 100000 $datadir/train data/lang ${gmmdir}_ali $working_dir/tri4 || exit 1;
 
   graph_dir=$working_dir/tri4/graph
   $mkgraph_cmd $graph_dir/mkgraph.log \
-    utils/mkgraph.sh data/lang_test_bg ${working_dir}/tri4 $graph_dir || exit 1;
-  steps/decode.sh --nj 12 --cmd "$decode_cmd" $decode_param --scoring-opts "$scoring_opts" \
+    utils/mkgraph.sh data/lang_test ${working_dir}/tri4 $graph_dir || exit 1;
+  steps/decode.sh --nj 8 --cmd "$decode_cmd" $decode_param --scoring-opts "$scoring_opts" \
       $graph_dir $datadir/dev ${working_dir}/tri4/decode_dev || exit 1;
-  steps/decode.sh --nj 12 --cmd "$decode_cmd" $decode_param --scoring-opts "$scoring_opts" \
+  steps/decode.sh --nj 11 --cmd "$decode_cmd" $decode_param --scoring-opts "$scoring_opts" \
       $graph_dir $datadir/test ${working_dir}/tri4/decode_test || exit 1;
   touch $working_dir/lda.mllt.done
 fi
@@ -203,9 +210,9 @@ if [ ! -f $working_dir/mmi.done ]; then
 
   for iter in 1 2 3 4; do
     graph_dir=$working_dir/tri4/graph
-    steps/decode.sh --nj 12 --cmd "$decode_cmd" $decode_param --scoring-opts "$scoring_opts" --iter $iter \
+    steps/decode.sh --nj 8 --cmd "$decode_cmd" $decode_param --scoring-opts "$scoring_opts" --iter $iter \
       $graph_dir $datadir/dev ${working_dir}/tri4_mmi_b0.1/decode_dev_it$iter || exit 1;
-    steps/decode.sh --nj 12 --cmd "$decode_cmd" $decode_param --scoring-opts "$scoring_opts" --iter $iter \
+    steps/decode.sh --nj 11 --cmd "$decode_cmd" $decode_param --scoring-opts "$scoring_opts" --iter $iter \
       $graph_dir $datadir/test ${working_dir}/tri4_mmi_b0.1/decode_test_it$iter || exit 1;
   done
   touch $working_dir/mmi.done
@@ -217,18 +224,18 @@ echo =====================================================================
 # SGMM system building and decoding
 if [ ! -f $working_dir/sgmm.done ]; then
   steps/train_ubm.sh --cmd "$train_cmd" \
-    400 $datadir/train data/lang ${working_dir}/tri4_ali ${working_dir}/ubm5 || exit 1;
+    700 $datadir/train data/lang ${working_dir}/tri4_ali ${working_dir}/ubm5 || exit 1;
 
-  steps/train_sgmm2.sh --cmd "$train_cmd" 7000 9000 \
+  steps/train_sgmm2.sh --cmd "$train_cmd" 10000 30000 \
     $datadir/train data/lang ${working_dir}/tri4_ali ${working_dir}/ubm5/final.ubm ${working_dir}/sgmm5a || exit 1;
 
   graph_dir=$working_dir/sgmm5a/graph
   $decode_cmd $graph_dir/mkgraph.log \
-    utils/mkgraph.sh data/lang_test_bg ${working_dir}/sgmm5a $graph_dir || exit 1;
+    utils/mkgraph.sh data/lang_test ${working_dir}/sgmm5a $graph_dir || exit 1;
 
-  steps/decode_sgmm2.sh --nj 12 --cmd "$decode_cmd" --acwt 0.125 --scoring-opts "$scoring_opts"  \
+  steps/decode_sgmm2.sh --nj 8 --cmd "$decode_cmd" --acwt 0.04 --scoring-opts "$scoring_opts"  \
     $graph_dir $datadir/dev ${working_dir}/sgmm5a/decode_dev || exit 1;
-  steps/decode_sgmm2.sh --nj 12 --cmd "$decode_cmd" --acwt 0.125 --scoring-opts "$scoring_opts"  \
+  steps/decode_sgmm2.sh --nj 11 --cmd "$decode_cmd" --acwt 0.04 --scoring-opts "$scoring_opts"  \
     $graph_dir $datadir/test ${working_dir}/sgmm5a/decode_test || exit 1;
   touch $working_dir/sgmm.done
 fi
@@ -250,9 +257,9 @@ if [ ! -f $working_dir/mmi.sgmm.done ]; then
 
   for iter in 1 2 3 4; do
     steps/decode_sgmm2_rescore.sh --cmd "$decode_cmd" --iter $iter \
-      data/lang_test_bg $datadir/dev ${working_dir}/sgmm5a/decode_dev ${working_dir}/sgmm5a_mmi_b0.1/decode_dev_it$iter || exit 1;
+      data/lang_test $datadir/dev ${working_dir}/sgmm5a/decode_dev ${working_dir}/sgmm5a_mmi_b0.1/decode_dev_it$iter || exit 1;
     steps/decode_sgmm2_rescore.sh --cmd "$decode_cmd" --iter $iter \
-      data/lang_test_bg $datadir/test ${working_dir}/sgmm5a/decode_test ${working_dir}/sgmm5a_mmi_b0.1/decode_test_it$iter || exit 1;
+      data/lang_test $datadir/test ${working_dir}/sgmm5a/decode_test ${working_dir}/sgmm5a_mmi_b0.1/decode_test_it$iter || exit 1;
   done
   touch $working_dir/mmi.sgmm.done
 fi

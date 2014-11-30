@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# results of tri3, the SAT system 
+%WER 27.4 | 507 17792 | 77.9 16.6 5.5 5.4 27.4 96.1 | -0.176 | exp/tri3/decode_dev/score_18/ctm.filt.filt.sys
+%WER 24.7 | 1155 27512 | 79.6 16.3 4.1 4.3 24.7 93.2 | -0.053 | exp/tri3/decode_test/score_15/ctm.filt.filt.sys
+
+# run-dnn.sh
+
+# run-bnf-tandem.sh -- apply mean normalization over BNF; the default config
+
+# run-dnn-fbank.sh
+
+# run-cnn.sh
