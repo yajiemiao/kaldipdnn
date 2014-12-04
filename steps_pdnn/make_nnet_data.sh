@@ -22,7 +22,7 @@ echo "$0 $@"  # Print the command line for logging
 . parse_options.sh || exit 1;
 
 if [ $# != 5 ]; then
-   echo "Wrong #arguments ($#, expected 7)"
+   echo "Wrong #arguments ($#, expected 5)"
    echo "usage: make_nnet_data.sh <data-dir> <srcdata-dir> <feat-dir> <log-dir> <dir>"
    echo "e.g.:  make_nnet_data.sh data/nnet_input data/train exp/feat exp/_log exp/"
    echo "main options (for others, see top of script file)"

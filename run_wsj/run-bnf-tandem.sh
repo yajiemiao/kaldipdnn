@@ -200,21 +200,21 @@ if [ ! -f $working_dir/mmi.done ]; then
   steps/align_si.sh --nj 30 --cmd "$train_cmd" \
     $datadir/train data/lang ${working_dir}/tri4 ${working_dir}/tri4_ali || exit 1;
 
-  steps/make_denlats.sh --nj 30 --cmd "$decode_cmd" $denlats_param \
-    $datadir/train data/lang ${working_dir}/tri4 ${working_dir}/tri4_denlats || exit 1;
+#  steps/make_denlats.sh --nj 30 --cmd "$decode_cmd" $denlats_param \
+#    $datadir/train data/lang ${working_dir}/tri4 ${working_dir}/tri4_denlats || exit 1;
 
   # 4 iterations of MMI
-  num_mmi_iters=4
-  steps/train_mmi.sh --cmd "$train_cmd" --boost 0.1 --num-iters $num_mmi_iters \
-    $datadir/train data/lang $working_dir/tri4_{ali,denlats} $working_dir/tri4_mmi_b0.1 || exit 1;
+#  num_mmi_iters=4
+#  steps/train_mmi.sh --cmd "$train_cmd" --boost 0.1 --num-iters $num_mmi_iters \
+#    $datadir/train data/lang $working_dir/tri4_{ali,denlats} $working_dir/tri4_mmi_b0.1 || exit 1;
 
-  for iter in 1 2 3 4; do
-    graph_dir=$working_dir/tri4/graph_bd_tgpr
-    steps/decode.sh --nj 10 --cmd "$decode_cmd" $decode_param --scoring-opts "$scoring_opts" --iter $iter \
-      $graph_dir $datadir/dev93 ${working_dir}/tri4_mmi_b0.1/decode_bd_tgpr_dev93_it$iter || exit 1;
-    steps/decode.sh --nj 8 --cmd "$decode_cmd" $decode_param --scoring-opts "$scoring_opts" --iter $iter \
-      $graph_dir $datadir/eval92 ${working_dir}/tri4_mmi_b0.1/decode_bd_tgpr_eval92_it$iter || exit 1;
-  done
+#  for iter in 1 2 3 4; do
+#    graph_dir=$working_dir/tri4/graph_bd_tgpr
+#    steps/decode.sh --nj 10 --cmd "$decode_cmd" $decode_param --scoring-opts "$scoring_opts" --iter $iter \
+#      $graph_dir $datadir/dev93 ${working_dir}/tri4_mmi_b0.1/decode_bd_tgpr_dev93_it$iter || exit 1;
+#    steps/decode.sh --nj 8 --cmd "$decode_cmd" $decode_param --scoring-opts "$scoring_opts" --iter $iter \
+#      $graph_dir $datadir/eval92 ${working_dir}/tri4_mmi_b0.1/decode_bd_tgpr_eval92_it$iter || exit 1;
+#  done
   touch $working_dir/mmi.done
 fi
 

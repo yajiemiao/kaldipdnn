@@ -9,7 +9,7 @@
 # For more informaiton regarding the recipes and results, visit the webiste
 # http://www.cs.cmu.edu/~ymiao/kaldipdnn
 
-working_dir=exp_pdnn/dnn_tmp_V2
+working_dir=exp_pdnn/dnn_kaldi_io
 gmmdir=exp/tri3
 
 # Specify the gpu device to be used
@@ -98,17 +98,15 @@ echo =====================================================================
 for set in tr95 cv05; do
   if [ ! -f $working_dir/${set}.netdata.done ]; then
     steps_pdnn/make_nnet_data.sh --nj 10 --cmd "$train_cmd" --norm-vars false \
-      --splice-opts "--left-context=0 --right-context=0" \
+      --splice-opts "--left-context=5 --right-context=5" \
       $working_dir/data_nnet/train_$set $working_dir/data/train_$set \
       $working_dir/_nnet_input ${gmmdir}_ali_$set $working_dir || exit 1
     touch $working_dir/${set}.netdata.done
   fi
 done
-# Rename pfiles to keep consistency
+# Shuffle the scp list
 cat $working_dir/data_nnet/train_tr95/feats.scp | utils/shuffle_list.pl --srand ${seed:-777} > $working_dir/train_tr95.scp
 cat $working_dir/data_nnet/train_cv05/feats.scp | utils/shuffle_list.pl --srand ${seed:-777} > $working_dir/train_cv05.scp
-
-exit
 
 echo =====================================================================
 echo "                  DNN Pre-training & Fine-tuning                   "
@@ -119,29 +117,19 @@ if [ ! -f $working_dir/dnn.ptr.done ]; then
   $cmd $working_dir/log/dnn.ptr.log \
     export PYTHONPATH=$PYTHONPATH:`pwd`/pdnn/ \; \
     export THEANO_FLAGS=mode=FAST_RUN,device=$gpu,floatX=float32 \; \
-    $pythonCMD pdnn/cmds/run_RBM.py --train-data "$working_dir/train.pfile.gz,partition=1000m,random=true,stream=false" \
+    $pythonCMD pdnn/cmds/run_RBM.py --train-data "$working_dir/train_tr95.scp,partition=1000m,random=true,stream=false" \
                                --nnet-spec "$feat_dim:1024:1024:1024:1024:$num_pdfs" --wdir $working_dir \
                                --ptr-layer-number 4 --param-output-file $working_dir/dnn.ptr || exit 1;
   touch $working_dir/dnn.ptr.done
 fi
-
-# For SDA pre-training
-#$pythonCMD pdnn/cmds/run_SdA.py --train-data "$working_dir/train.pfile.gz,partition=1000m,random=true,stream=false" \
-#                          --nnet-spec "$feat_dim:1024:1024:1024:1024:$num_pdfs" \
-#                          --first-reconstruct-activation "tanh" \
-#                          --wdir $working_dir --output-file $working_dir/dnn.ptr \
-#                          --ptr-layer-number 4 --epoch-number 5 || exit 1;
-
-# To apply dropout, add "--dropout-factor 0.2,0.2,0.2,0.2" and change the value of "--lrate" to "D:0.8:0.5:0.2,0.2:8"
-# Check run_timit/RESULTS for the results
 
 if [ ! -f $working_dir/dnn.fine.done ]; then
   echo "Fine-tuning DNN"
   $cmd $working_dir/log/dnn.fine.log \
     export PYTHONPATH=$PYTHONPATH:`pwd`/pdnn/ \; \
     export THEANO_FLAGS=mode=FAST_RUN,device=$gpu,floatX=float32 \; \
-    $pythonCMD pdnn/cmds/run_DNN.py --train-data "$working_dir/train.pfile.gz,partition=1000m,random=true,stream=false" \
-                          --valid-data "$working_dir/valid.pfile.gz,partition=200m,random=true,stream=false" \
+    $pythonCMD pdnn/cmds/run_DNN.py --train-data "$working_dir/train_tr95.scp,label=train_tr95.ali.gz,partition=1000m,random=true,stream=false" \
+                          --valid-data "$working_dir/train_cv05.scp,label=train_cv05.ali.gz,partition=200m,random=true,stream=false" \
                           --nnet-spec "$feat_dim:1024:1024:1024:1024:$num_pdfs" \
                           --ptr-file $working_dir/dnn.ptr --ptr-layer-number 4 \
                           --lrate "D:0.08:0.5:0.2,0.2:8" \
@@ -155,9 +143,9 @@ echo =====================================================================
 if [ ! -f  $working_dir/decode.done ]; then
   cp $gmmdir/final.mdl $working_dir || exit 1;  # copy final.mdl for scoring
   graph_dir=$gmmdir/graph
-  steps_pdnn/decode_dnn.sh --nj 12 --scoring-opts "--min-lmwt 1 --max-lmwt 8" --cmd "$decode_cmd" --norm-vars false \
+  steps_pdnn/decode_dnn.sh --nj 12 --scoring-opts "--min-lmwt 1 --max-lmwt 8" --cmd "$decode_cmd" \
     $graph_dir $working_dir/data/dev ${gmmdir}_ali_tr95 $working_dir/decode_dev || exit 1;
-  steps_pdnn/decode_dnn.sh --nj 12 --scoring-opts "--min-lmwt 1 --max-lmwt 8" --cmd "$decode_cmd" --norm-vars false \
+  steps_pdnn/decode_dnn.sh --nj 12 --scoring-opts "--min-lmwt 1 --max-lmwt 8" --cmd "$decode_cmd" \
     $graph_dir $working_dir/data/test ${gmmdir}_ali_tr95 $working_dir/decode_test || exit 1;
 
   touch $working_dir/decode.done

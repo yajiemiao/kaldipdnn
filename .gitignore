@@ -1,0 +1,4 @@
+make_post_nnet_bkup.sh
+make_post_nnet.sh
+make_seq_data.sh
+run-dnn-mpe.sh
