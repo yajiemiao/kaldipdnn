@@ -148,9 +148,9 @@ echo =====================================================================
 if [ ! -f  $working_dir/decode.done ]; then
   cp $gmmdir/final.mdl $working_dir || exit 1;  # copy final.mdl for scoring
   graph_dir=$gmmdir/graph
-  steps_pdnn/decode_dnn.sh --nj 24 --scoring-opts "--min-lmwt 1 --max-lmwt 8" --cmd "$decode_cmd" \
+  steps_pdnn/decode_dnn.sh --nj 12 --scoring-opts "--min-lmwt 1 --max-lmwt 8" --cmd "$decode_cmd" \
     $graph_dir $working_dir/data/dev ${gmmdir}_ali_tr95 $working_dir/decode_dev || exit 1;
-  steps_pdnn/decode_dnn.sh --nj 24 --scoring-opts "--min-lmwt 1 --max-lmwt 8" --cmd "$decode_cmd" \
+  steps_pdnn/decode_dnn.sh --nj 12 --scoring-opts "--min-lmwt 1 --max-lmwt 8" --cmd "$decode_cmd" \
     $graph_dir $working_dir/data/test ${gmmdir}_ali_tr95 $working_dir/decode_test || exit 1;
 
   touch $working_dir/decode.done

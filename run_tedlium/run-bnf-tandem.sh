@@ -183,7 +183,7 @@ if [ ! -f $working_dir/lda.mllt.done ]; then
     5000 100000 $datadir/train data/lang ${gmmdir}_ali $working_dir/tri4 || exit 1;
 
   graph_dir=$working_dir/tri4/graph
-  $mkgraph_cmd $graph_dir/mkgraph.log \
+  $decode_cmd $graph_dir/mkgraph.log \
     utils/mkgraph.sh data/lang_test ${working_dir}/tri4 $graph_dir || exit 1;
   steps/decode.sh --nj 8 --cmd "$decode_cmd" $decode_param --scoring-opts "$scoring_opts" \
       $graph_dir $datadir/dev ${working_dir}/tri4/decode_dev || exit 1;

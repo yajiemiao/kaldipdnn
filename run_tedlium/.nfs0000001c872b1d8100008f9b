@@ -10,7 +10,7 @@
 # http://www.cs.cmu.edu/~ymiao/kaldipdnn
 
 working_dir=exp_pdnn/bnf_tandem
-gmmdir=exp/tri4b
+gmmdir=exp/tri3
 
 # Specify the gpu device to be used
 gpu=gpu
@@ -61,12 +61,12 @@ echo "           Data Split & Alignment & Feature Preparation            "
 echo =====================================================================
 # Split training data into traing and cross-validation sets for DNN
 if [ ! -d data/train_tr95 ]; then
-  utils/subset_data_dir_tr_cv.sh --cv-spk-percent 5 data/train_si284 data/train_tr95 data/train_cv05 || exit 1
+  utils/subset_data_dir_tr_cv.sh --cv-spk-percent 5 data/train data/train_tr95 data/train_cv05 || exit 1
 fi
-# Alignment on the training and validation data. --nj is set to *14* because train_cv05 only contains 14 speakers
+# Alignment on the training and validation data. 
 for set in tr95 cv05; do
   if [ ! -d ${gmmdir}_ali_$set ]; then
-    steps/align_fmllr.sh --nj 14 --cmd "$train_cmd" \
+    steps/align_fmllr.sh --nj 24 --cmd "$train_cmd" \
       data/train_$set data/lang $gmmdir ${gmmdir}_ali_$set || exit 1
   fi
 done
@@ -74,18 +74,18 @@ done
 # Dump fMLLR features. "Fake" cmvn states (0 means and 1 variance) are applied. 
 for set in tr95 cv05; do
   if [ ! -d $working_dir/data/train_$set ]; then
-    steps/nnet/make_fmllr_feats.sh --nj 14 --cmd "$train_cmd" \
+    steps/nnet/make_fmllr_feats.sh --nj 24 --cmd "$train_cmd" \
       --transform-dir ${gmmdir}_ali_$set \
       $working_dir/data/train_$set data/train_$set $gmmdir $working_dir/_log $working_dir/_fmllr || exit 1
     steps/compute_cmvn_stats.sh --fake \
       $working_dir/data/train_$set $working_dir/_log $working_dir/_fmllr || exit 1;
   fi
 done
-for set in dev93 eval92; do
+for set in dev test; do
   if [ ! -d $working_dir/data/$set ]; then
     steps/nnet/make_fmllr_feats.sh --nj 8 --cmd "$train_cmd" \
-      --transform-dir $gmmdir/decode_bd_tgpr_$set \
-      $working_dir/data/$set data/test_$set $gmmdir $working_dir/_log $working_dir/_fmllr || exit 1
+      --transform-dir $gmmdir/decode_$set \
+      $working_dir/data/$set data/$set $gmmdir $working_dir/_log $working_dir/_fmllr || exit 1
     steps/compute_cmvn_stats.sh --fake \
       $working_dir/data/$set $working_dir/_log $working_dir/_fmllr || exit 1;
   fi
@@ -97,8 +97,8 @@ echo =====================================================================
 # By default, DNN inputs include 11 frames of fMLLR
 for set in tr95 cv05; do
   if [ ! -f $working_dir/${set}.pfile.done ]; then
-    steps_pdnn/build_nnet_pfile.sh --cmd "$train_cmd" --norm-vars false --do-concat false \
-      --splice-opts "--left-context=5 --right-context=5" \
+    steps_pdnn/build_nnet_pfile.sh --cmd "$train_cmd" --do-concat false \
+      --norm-vars false --splice-opts "--left-context=5 --right-context=5" \
       $working_dir/data/train_$set ${gmmdir}_ali_$set $working_dir || exit 1
     touch $working_dir/${set}.pfile.done
   fi
@@ -156,7 +156,7 @@ for set in train; do
       $working_dir/data_bnf/${set} $working_dir/_log $working_dir/_bnf || exit 1;
   fi
 done
-for set in dev93 eval92; do
+for set in dev test; do
   if [ ! -d $working_dir/data_bnf/${set} ]; then
     steps_pdnn/make_bnf_feat.sh --nj 8 --cmd "$train_cmd" \
       $working_dir/data_bnf/${set} $working_dir/data/${set} $working_dir $working_dir/_log $working_dir/_bnf || exit 1
@@ -179,16 +179,16 @@ denlats_param="--acwt 0.05"                            # Parameters for lattice 
 
 # LDA+MLLT systems building and decoding
 if [ ! -f $working_dir/lda.mllt.done ]; then
-  steps/train_lda_mllt.sh --cmd "$train_cmd" \
-    4200 40000 $datadir/train data/lang ${gmmdir}_ali $working_dir/tri4 || exit 1;
+#  steps/train_lda_mllt.sh --cmd "$train_cmd" \
+#    5000 100000 $datadir/train data/lang ${gmmdir}_ali $working_dir/tri4 || exit 1;
 
-  graph_dir=$working_dir/tri4/graph_bd_tgpr
-  $mkgraph_cmd $graph_dir/mkgraph.log \
-    utils/mkgraph.sh data/lang_test_bd_tgpr ${working_dir}/tri4 $graph_dir || exit 1;
-  steps/decode.sh --nj 10 --cmd "$decode_cmd" $decode_param --scoring-opts "$scoring_opts" \
-      $graph_dir $datadir/dev93 ${working_dir}/tri4/decode_bd_tgpr_dev93 || exit 1;
+  graph_dir=$working_dir/tri4/graph
+  $decode_cmd $graph_dir/mkgraph.log \
+    utils/mkgraph.sh data/lang_test ${working_dir}/tri4 $graph_dir || exit 1;
   steps/decode.sh --nj 8 --cmd "$decode_cmd" $decode_param --scoring-opts "$scoring_opts" \
-      $graph_dir $datadir/eval92 ${working_dir}/tri4/decode_bd_tgpr_eval92 || exit 1;
+      $graph_dir $datadir/dev ${working_dir}/tri4/decode_dev || exit 1;
+  steps/decode.sh --nj 11 --cmd "$decode_cmd" $decode_param --scoring-opts "$scoring_opts" \
+      $graph_dir $datadir/test ${working_dir}/tri4/decode_test || exit 1;
   touch $working_dir/lda.mllt.done
 fi
 
@@ -209,11 +209,11 @@ if [ ! -f $working_dir/mmi.done ]; then
     $datadir/train data/lang $working_dir/tri4_{ali,denlats} $working_dir/tri4_mmi_b0.1 || exit 1;
 
   for iter in 1 2 3 4; do
-    graph_dir=$working_dir/tri4/graph_bd_tgpr
-    steps/decode.sh --nj 10 --cmd "$decode_cmd" $decode_param --scoring-opts "$scoring_opts" --iter $iter \
-      $graph_dir $datadir/dev93 ${working_dir}/tri4_mmi_b0.1/decode_bd_tgpr_dev93_it$iter || exit 1;
+    graph_dir=$working_dir/tri4/graph
     steps/decode.sh --nj 8 --cmd "$decode_cmd" $decode_param --scoring-opts "$scoring_opts" --iter $iter \
-      $graph_dir $datadir/eval92 ${working_dir}/tri4_mmi_b0.1/decode_bd_tgpr_eval92_it$iter || exit 1;
+      $graph_dir $datadir/dev ${working_dir}/tri4_mmi_b0.1/decode_dev_it$iter || exit 1;
+    steps/decode.sh --nj 11 --cmd "$decode_cmd" $decode_param --scoring-opts "$scoring_opts" --iter $iter \
+      $graph_dir $datadir/test ${working_dir}/tri4_mmi_b0.1/decode_test_it$iter || exit 1;
   done
   touch $working_dir/mmi.done
 fi
@@ -224,19 +224,19 @@ echo =====================================================================
 # SGMM system building and decoding
 if [ ! -f $working_dir/sgmm.done ]; then
   steps/train_ubm.sh --cmd "$train_cmd" \
-    600 $datadir/train data/lang ${working_dir}/tri4_ali ${working_dir}/ubm5 || exit 1;
+    700 $datadir/train data/lang ${working_dir}/tri4_ali ${working_dir}/ubm5 || exit 1;
 
-  steps/train_sgmm2.sh --cmd "$train_cmd" 11000 25000 \
+  steps/train_sgmm2.sh --cmd "$train_cmd" 10000 30000 \
     $datadir/train data/lang ${working_dir}/tri4_ali ${working_dir}/ubm5/final.ubm ${working_dir}/sgmm5a || exit 1;
 
-  graph_dir=$working_dir/sgmm5a/graph_bd_tgpr
+  graph_dir=$working_dir/sgmm5a/graph
   $decode_cmd $graph_dir/mkgraph.log \
-    utils/mkgraph.sh data/lang_test_bd_tgpr ${working_dir}/sgmm5a $graph_dir || exit 1;
+    utils/mkgraph.sh data/lang_test ${working_dir}/sgmm5a $graph_dir || exit 1;
 
-  steps/decode_sgmm2.sh --nj 10 --cmd "$decode_cmd" --acwt 0.04 --scoring-opts "$scoring_opts"  \
-    $graph_dir $datadir/dev93 ${working_dir}/sgmm5a/decode_bd_tgpr_dev93 || exit 1;
   steps/decode_sgmm2.sh --nj 8 --cmd "$decode_cmd" --acwt 0.04 --scoring-opts "$scoring_opts"  \
-    $graph_dir $datadir/eval92 ${working_dir}/sgmm5a/decode_bd_tgpr_eval92 || exit 1;
+    $graph_dir $datadir/dev ${working_dir}/sgmm5a/decode_dev || exit 1;
+  steps/decode_sgmm2.sh --nj 11 --cmd "$decode_cmd" --acwt 0.04 --scoring-opts "$scoring_opts"  \
+    $graph_dir $datadir/test ${working_dir}/sgmm5a/decode_test || exit 1;
   touch $working_dir/sgmm.done
 fi
 
@@ -257,11 +257,9 @@ if [ ! -f $working_dir/mmi.sgmm.done ]; then
 
   for iter in 1 2 3 4; do
     steps/decode_sgmm2_rescore.sh --cmd "$decode_cmd" --iter $iter \
-      data/lang_test_bd_tgpr $datadir/dev93 ${working_dir}/sgmm5a/decode_bd_tgpr_dev93 \
-      ${working_dir}/sgmm5a_mmi_b0.1/decode_bd_tgpr_dev93_it$iter || exit 1;
+      data/lang_test $datadir/dev ${working_dir}/sgmm5a/decode_dev ${working_dir}/sgmm5a_mmi_b0.1/decode_dev_it$iter || exit 1;
     steps/decode_sgmm2_rescore.sh --cmd "$decode_cmd" --iter $iter \
-      data/lang_test_bd_tgpr $datadir/eval92 ${working_dir}/sgmm5a/decode_bd_tgpr_eval92 \
-      ${working_dir}/sgmm5a_mmi_b0.1/decode_bd_tgpr_eval92_it$iter || exit 1;
+      data/lang_test $datadir/test ${working_dir}/sgmm5a/decode_test ${working_dir}/sgmm5a_mmi_b0.1/decode_test_it$iter || exit 1;
   done
   touch $working_dir/mmi.sgmm.done
 fi

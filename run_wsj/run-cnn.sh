@@ -127,7 +127,7 @@ if [ ! -f $working_dir/cnn.fine.done ]; then
                           --nnet-spec "1024:1024:1024:1024:$num_pdfs" \
                           --lrate "D:0.08:0.5:0.2,0.2:4" --momentum 0.9 \
                           --wdir $working_dir --param-output-file $working_dir/nnet.param \
-                          --param-output-file $working_dir/nnet.cfg --kaldi-output-file $working_dir/dnn.nnet || exit 1;
+                          --cfg-output-file $working_dir/nnet.cfg --kaldi-output-file $working_dir/dnn.nnet || exit 1;
   touch $working_dir/cnn.fine.done
 fi
 
