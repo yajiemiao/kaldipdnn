@@ -131,8 +131,6 @@ if [ ! -f $working_dir/cnn.fine.done ]; then
   touch $working_dir/cnn.fine.done
 fi
 
-exit
-
 echo =====================================================================
 echo "                Dump Convolution-Layer Activation                  "
 echo =====================================================================
