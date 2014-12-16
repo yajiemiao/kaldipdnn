@@ -1,16 +1,15 @@
 #!/bin/bash
 
-# Copyright 2014     Yajie Miao   Carnegie Mellon University      Apache 2.0
-# This is the script that trains DNN system over the filterbank features. It
-# is to  be  run after run.sh. Before running this, you should already build
-# the initial GMM model. This script requires a GPU card, and also the "pdnn"
-# toolkit to train the DNN. The input filterbank features are with mean  and
-# variance normalization.
+# Copyright 2014     Yajie Miao   Carnegie Mellon University       Apache 2.0
+# This script trains  Maxout Network  models over fMLLR features. It is to be
+# run after run.sh. Before running this, you should already build the initial
+# GMM model. This script requires a GPU, and also the "pdnn" toolkit to train
+# the DNN.
 
 # For more informaiton regarding the recipes and results, visit the webiste
 # http://www.cs.cmu.edu/~ymiao/kaldipdnn
 
-working_dir=exp_pdnn/dnn_fbank
+working_dir=exp_pdnn/dnn_maxout
 gmmdir=exp/tri3
 
 # Specify the gpu device to be used
@@ -64,43 +63,41 @@ echo =====================================================================
 if [ ! -d data/train_tr95 ]; then
   utils/subset_data_dir_tr_cv.sh --cv-spk-percent 5 data/train data/train_tr95 data/train_cv05 || exit 1
 fi
-# Alignment on the training and validation data
+# Alignment on the training and validation data.
 for set in tr95 cv05; do
   if [ ! -d ${gmmdir}_ali_$set ]; then
     steps/align_fmllr.sh --nj 24 --cmd "$train_cmd" \
       data/train_$set data/lang $gmmdir ${gmmdir}_ali_$set || exit 1
   fi
 done
-
-# Generate the fbank features: 40-dimensional fbanks on each frame
-echo "--num-mel-bins=40" > conf/fbank.conf
-mkdir -p $working_dir/data
-for set in train_tr95 train_cv05; do
-  if [ ! -d $working_dir/data/$set ]; then
-    cp -r data/$set $working_dir/data/$set
-    ( cd $working_dir/data/$set; rm -rf {cmvn,feats}.scp split*; )
-    steps/make_fbank.sh --cmd "$train_cmd" --nj 24 $working_dir/data/$set $working_dir/_log $working_dir/_fbank || exit 1;
-    steps/compute_cmvn_stats.sh $working_dir/data/$set $working_dir/_log $working_dir/_fbank || exit 1;
+# Dump fMLLR features. "Fake" cmvn states (0 means and 1 variance) are applied. 
+for set in tr95 cv05; do
+  if [ ! -d $working_dir/data/train_$set ]; then
+    steps/nnet/make_fmllr_feats.sh --nj 24 --cmd "$train_cmd" \
+      --transform-dir ${gmmdir}_ali_$set \
+      $working_dir/data/train_$set data/train_$set $gmmdir $working_dir/_log $working_dir/_fmllr || exit 1
+    steps/compute_cmvn_stats.sh --fake \
+      $working_dir/data/train_$set $working_dir/_log $working_dir/_fmllr || exit 1;
   fi
 done
-
 for set in dev test; do
   if [ ! -d $working_dir/data/$set ]; then
-    cp -r data/$set $working_dir/data/$set
-    ( cd $working_dir/data/$set; rm -rf {cmvn,feats}.scp split*; )
-    steps/make_fbank.sh --cmd "$train_cmd" --nj 8 $working_dir/data/$set $working_dir/_log $working_dir/_fbank || exit 1;
-    steps/compute_cmvn_stats.sh $working_dir/data/$set $working_dir/_log $working_dir/_fbank || exit 1;
+    steps/nnet/make_fmllr_feats.sh --nj 8 --cmd "$train_cmd" \
+      --transform-dir $gmmdir/decode_$set \
+      $working_dir/data/$set data/$set $gmmdir $working_dir/_log $working_dir/_fmllr || exit 1
+    steps/compute_cmvn_stats.sh --fake \
+      $working_dir/data/$set $working_dir/_log $working_dir/_fmllr || exit 1;
   fi
 done
 
 echo =====================================================================
 echo "               Training and Cross-Validation Pfiles                "
 echo =====================================================================
-# By default, DNN inputs include 11 frames of filterbanks
+# By default, DNN inputs include 11 frames of fMLLR
 for set in tr95 cv05; do
   if [ ! -f $working_dir/${set}.pfile.done ]; then
     steps_pdnn/build_nnet_pfile.sh --cmd "$train_cmd" --do-concat false \
-      --norm-vars true --splice-opts "--left-context=5 --right-context=5" \
+      --norm-vars false --splice-opts "--left-context=5 --right-context=5" \
       $working_dir/data/train_$set ${gmmdir}_ali_$set $working_dir || exit 1
     touch $working_dir/${set}.pfile.done
   fi
@@ -111,19 +108,6 @@ echo "                  DNN Pre-training & Fine-tuning                   "
 echo =====================================================================
 feat_dim=$(gunzip -c $working_dir/train_tr95.pfile.1.gz |head |grep num_features| awk '{print $2}') || exit 1;
 
-if [ ! -f $working_dir/dnn.ptr.done ]; then
-  echo "SDA Pre-training"
-  $cmd $working_dir/log/dnn.ptr.log \
-    export PYTHONPATH=$PYTHONPATH:`pwd`/pdnn/ \; \
-    export THEANO_FLAGS=mode=FAST_RUN,device=$gpu,floatX=float32 \; \
-    $pythonCMD pdnn/cmds/run_SdA.py --train-data "$working_dir/train_tr95.pfile.*.gz,partition=2000m,random=true,stream=false" \
-                                    --nnet-spec "$feat_dim:1024:1024:1024:1024:1024:1024:$num_pdfs" \
-                                    --1stlayer-reconstruct-activation "tanh" \
-                                    --wdir $working_dir --param-output-file $working_dir/dnn.ptr \
-                                    --ptr-layer-number 6 --epoch-number 5 || exit 1;
-  touch $working_dir/dnn.ptr.done
-fi
-
 if [ ! -f $working_dir/dnn.fine.done ]; then
   echo "Fine-tuning DNN"
   $cmd $working_dir/log/dnn.fine.log \
@@ -131,9 +115,9 @@ if [ ! -f $working_dir/dnn.fine.done ]; then
     export THEANO_FLAGS=mode=FAST_RUN,device=$gpu,floatX=float32 \; \
     $pythonCMD pdnn/cmds/run_DNN.py --train-data "$working_dir/train_tr95.pfile.*.gz,partition=2000m,random=true,stream=true" \
                                     --valid-data "$working_dir/train_cv05.pfile.*.gz,partition=600m,random=true,stream=true" \
-                                    --nnet-spec "$feat_dim:1024:1024:1024:1024:1024:1024:$num_pdfs" \
-                                    --ptr-file $working_dir/dnn.ptr --ptr-layer-number 6 \
-                                    --lrate "D:0.08:0.5:0.2,0.2:8" \
+                                    --nnet-spec "$feat_dim:650:650:650:650:650:650:$num_pdfs" \
+                                    --activation "maxout:3" \
+                                    --lrate "D:0.008:0.5:0.2,0.2:8" \
                                     --wdir $working_dir --kaldi-output-file $working_dir/dnn.nnet || exit 1;
   touch $working_dir/dnn.fine.done
 fi
@@ -150,7 +134,7 @@ if [ ! -f  $working_dir/decode.done ]; then
     $graph_dir $working_dir/data/test ${gmmdir}_ali_tr95 $working_dir/decode_test || exit 1;
   touch $working_dir/decode.done
 fi
-# Decoding with our own LM. This trigram LM is trained over TED talk transcripts and is pruned
+# Decoding with our own pruned trigram LM. 
 if [ ! -f  $working_dir/decode.bd.done ] && [ -d $gmmdir/graph_bd_tgpr ]; then
   cp $gmmdir/final.mdl $working_dir || exit 1;  # copy final.mdl for scoring
   graph_dir=$gmmdir/graph_bd_tgpr

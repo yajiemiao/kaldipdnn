@@ -147,5 +147,15 @@ if [ ! -f  $working_dir/decode.done ]; then
     $graph_dir $working_dir/data/test ${gmmdir}_ali_tr95 $working_dir/decode_test || exit 1;
   touch $working_dir/decode.done
 fi
+# Decoding with our own LM. This trigram LM is trained over TED talk transcripts and is pruned
+if [ ! -f  $working_dir/decode.bd.done ] && [ -d $gmmdir/graph_bd_tgpr ]; then
+  cp $gmmdir/final.mdl $working_dir || exit 1;  # copy final.mdl for scoring
+  graph_dir=$gmmdir/graph_bd_tgpr
+  steps_pdnn/decode_dnn.sh --nj 8 --scoring-opts "--min-lmwt 7 --max-lmwt 18" --cmd "$decode_cmd" \
+    $graph_dir $working_dir/data/dev ${gmmdir}_ali_tr95 $working_dir/decode_dev_bd_tgpr || exit 1;
+  steps_pdnn/decode_dnn.sh --nj 11 --scoring-opts "--min-lmwt 7 --max-lmwt 18" --cmd "$decode_cmd" \
+    $graph_dir $working_dir/data/test ${gmmdir}_ali_tr95 $working_dir/decode_test_bd_tgpr || exit 1;
+  touch $working_dir/decode.bd.done
+fi
 
 echo "Finish !!"

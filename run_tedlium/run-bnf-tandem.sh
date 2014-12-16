@@ -196,6 +196,8 @@ echo =====================================================================
 echo "                      MMI Systems over BNFs                        "
 echo =====================================================================
 # MMI systems building and decoding
+scoring_opts="--min-lmwt 18 --max-lmwt 28"  # SGMM needs smaller lmwt
+
 if [ ! -f $working_dir/mmi.done ]; then
   steps/align_si.sh --nj 30 --cmd "$train_cmd" \
     $datadir/train data/lang ${working_dir}/tri4 ${working_dir}/tri4_ali || exit 1;
@@ -233,9 +235,9 @@ if [ ! -f $working_dir/sgmm.done ]; then
   $decode_cmd $graph_dir/mkgraph.log \
     utils/mkgraph.sh data/lang_test ${working_dir}/sgmm5a $graph_dir || exit 1;
 
-  steps/decode_sgmm2.sh --nj 8 --cmd "$decode_cmd" --acwt 0.04 --scoring-opts "$scoring_opts"  \
+  steps/decode_sgmm2.sh --stage 7 --nj 8 --cmd "$decode_cmd" --acwt 0.04 --scoring-opts "$scoring_opts"  \
     $graph_dir $datadir/dev ${working_dir}/sgmm5a/decode_dev || exit 1;
-  steps/decode_sgmm2.sh --nj 11 --cmd "$decode_cmd" --acwt 0.04 --scoring-opts "$scoring_opts"  \
+  steps/decode_sgmm2.sh --stage 7 --nj 11 --cmd "$decode_cmd" --acwt 0.04 --scoring-opts "$scoring_opts"  \
     $graph_dir $datadir/test ${working_dir}/sgmm5a/decode_test || exit 1;
   touch $working_dir/sgmm.done
 fi
