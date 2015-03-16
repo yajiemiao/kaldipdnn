@@ -142,7 +142,7 @@ if [ ! -f $working_dir/dnn.fine.done ]; then
                                     --valid-data "$working_dir/valid.pfile.*.gz,partition=600m,random=true,stream=true" \
                                     --nnet-spec "$feat_dim:1024:1024:1024:1024:1024:1024:$num_pdfs" \
                                     --ptr-file $working_dir/dnn.ptr --ptr-layer-number 6 \
-                                    --lrate "D:0.08:0.5:0.2,0.2:8" \
+                                    --lrate "D:0.08:0.5:0.2,0.2:8" --param-output-file $working_dir/nnet.param \
                                     --wdir $working_dir --kaldi-output-file $working_dir/dnn.nnet || exit 1;
   touch $working_dir/dnn.fine.done
 fi
