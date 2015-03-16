@@ -135,21 +135,37 @@ echo =====================================================================
 echo "                Dump Convolution-Layer Activation                  "
 echo =====================================================================
 mkdir -p $working_dir/data_conv
+ivec_dir=/data/ASR5/babel/ymiao/Install/kaldi-latest/egs/sre08/v1/exp_tedlium_bnf/ivectors_devtest
+
 for set in dev; do
+  if [ ! -d $working_dir/data_ivec/$set ]; then
+    steps_pdnn/sat/make_feat_with_ivec.sh --nj 8 --cmd "$train_cmd" --ivec-type speaker \
+      $working_dir/data_ivec/$set $working_dir/data/$set $working_dir $ivec_dir $working_dir/_log $working_dir/_ivec || exit 1;
+    steps/compute_cmvn_stats.sh --fake \
+      $working_dir/data_ivec/$set $working_dir/_log $working_dir/_ivec || exit 1;
+  fi
   if [ ! -d $working_dir/data_conv/$set ]; then
     steps_pdnn/make_conv_feat.sh --nj 8 --cmd "$decode_cmd" \
-      $working_dir/data_conv/$set $working_dir/data/$set $working_dir $working_dir/nnet.param \
-      $working_dir/nnet.cfg $working_dir/_log $working_dir/_conv || exit 1;
+      --norm-vars false --add-deltas false --splice-opts "--left-context=0 --right-context=0" \
+      $working_dir/data_conv/$set $working_dir/data_ivec/$set $working_dir $working_dir/nnet.param.si \
+      $working_dir/nnet.cfg.si $working_dir/_log $working_dir/_conv || exit 1;
     # Generate *fake* CMVN states here.
     steps/compute_cmvn_stats.sh --fake \
       $working_dir/data_conv/$set $working_dir/_log $working_dir/_conv || exit 1;
   fi
 done
 for set in test; do
+  if [ ! -d $working_dir/data_ivec/$set ]; then
+    steps_pdnn/sat/make_feat_with_ivec.sh --nj 8 --cmd "$train_cmd" --ivec-type speaker \
+      $working_dir/data_ivec/$set $working_dir/data/$set $working_dir $ivec_dir $working_dir/_log $working_dir/_ivec || exit 1;
+    steps/compute_cmvn_stats.sh --fake \
+      $working_dir/data_ivec/$set $working_dir/_log $working_dir/_ivec || exit 1;
+  fi
   if [ ! -d $working_dir/data_conv/$set ]; then
     steps_pdnn/make_conv_feat.sh --nj 11 --cmd "$decode_cmd" \
-      $working_dir/data_conv/$set $working_dir/data/$set $working_dir $working_dir/nnet.param \
-      $working_dir/nnet.cfg $working_dir/_log $working_dir/_conv || exit 1;
+      --norm-vars false --add-deltas false --splice-opts "--left-context=0 --right-context=0" \
+      $working_dir/data_conv/$set $working_dir/data_ivec/$set $working_dir $working_dir/nnet.param.si \
+      $working_dir/nnet.cfg.si $working_dir/_log $working_dir/_conv || exit 1;
     # Generate *fake* CMVN states here.
     steps/compute_cmvn_stats.sh --fake \
       $working_dir/data_conv/$set $working_dir/_log $working_dir/_conv || exit 1;
@@ -173,10 +189,12 @@ if [ ! -f  $working_dir/decode.done ]; then
     $graph_dir $working_dir/data_conv/test ${gmmdir}_ali_tr95 $working_dir/decode_test || exit 1;
   touch $working_dir/decode.done
 fi
+
 # Decoding with our own LM. This trigram LM is trained over TED talk transcripts and is pruned
 if [ ! -f  $working_dir/decode.bd.done ] && [ -d $gmmdir/graph_bd_tgpr ]; then
   cp $gmmdir/final.mdl $working_dir || exit 1;  # copy final.mdl for scoring
   graph_dir=$gmmdir/graph_bd_tgpr
+  gmmdir=exp_pdnn/dnn_fbank
   steps_pdnn/decode_dnn.sh --nj 8 --scoring-opts "--min-lmwt 8 --max-lmwt 12" --cmd "$decode_cmd" \
     --norm-vars false --add-deltas false --splice-opts "--left-context=0 --right-context=0" \
     $graph_dir $working_dir/data_conv/dev ${gmmdir}_ali_tr95 $working_dir/decode_dev_bd_tgpr || exit 1;

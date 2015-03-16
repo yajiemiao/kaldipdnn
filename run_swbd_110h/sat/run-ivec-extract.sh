@@ -23,13 +23,13 @@ echo ---------------------------------------------------------------------
 echo "Train the i-vector extractor with the entire SWBD set (310 hours)"
 echo ---------------------------------------------------------------------
 
-# MFCC config; slightly different from GMM/HMM
+# MFCC config borrowed from egs/sre08/v1
 echo "--sample-frequency=8000" > conf/mfcc.conf.ivec
 echo "--frame-length=20" >> conf/mfcc.conf.ivec
 echo "--low-freq=20" >> conf/mfcc.conf.ivec
 echo "--high-freq=3700" >> conf/mfcc.conf.ivec
 echo "--num-ceps=20" >> conf/mfcc.conf.ivec
-# Config for VAD (voice activity detection)
+# Config for VAD (voice activity detection) borrowed from egs/sre08/v1
 echo "--vad-energy-threshold=5.5" > conf/vad.conf
 echo "--vad-energy-mean-scale=0.5" >> conf/vad.conf
 
@@ -88,4 +88,4 @@ if [ ! -f exp_ivec/ivectors_eval2000/ivector.scp ]; then
     exp_ivec/extractor_2048 data_ivec/eval2000 exp_ivec/ivectors_eval2000
 fi
 
-echo "Finish !! Now you can safely delete data_ivec and mfcc_ivec."
+echo "Finish! Now you can safely delete data_ivec and mfcc_ivec."

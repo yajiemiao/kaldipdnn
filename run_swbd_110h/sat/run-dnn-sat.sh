@@ -69,74 +69,71 @@ mkdir -p $working_dir/log
 
 # Check whether i-vectors have been generated
 for f in $train_ivec/ivector.scp $decode_ivec/ivector.scp; do
-  [ ! -f $f ] && echo "Error i-vectors for $f have NOT been extracted. Check/Run run_swbd_110h/run-ivec-extract.sh." && exit 1;
+  [ ! -f $f ] && echo "Error i-vectors for $f have NOT been extracted. Check/Run run_swbd_110h/sat/run-ivec-extract.sh." && exit 1;
 done
 # Check whether the initial DNN has been trained 
-[ ! -f $initdnn_dir/nnet.finetune.tmp ] && echo "Error the initial DNN $initdnn_dir/nnet.finetune.tmp has NOT been trained" && exit 1;
+[ ! -f $initdnn_dir/nnet.param ] && echo "Error the initial DNN $initdnn_dir/nnet.param has NOT been trained" && exit 1;
 
 # Prepare dataset; copy related files from the initial DNN directory
-ln -s $PWD/$initdnn_dir/data $working_dir/data
-cp $initdnn_dir/splice_opts $working_dir
+ln -s $PWD/$initdnn_dir/data $working_dir/data || exit 1;
+cp $initdnn_dir/{splice_opts,norm_vars,add_deltas} $working_dir || exit 1;
 splice_opts=`cat $working_dir/splice_opts 2>/dev/null` # frame-splicing options.
+norm_vars=`cat $working_dir/norm_vars 2>/dev/null`     # variance normalization?
+add_deltas=`cat $working_dir/add_deltas 2>/dev/null`   # add deltas?
 
-echo ---------------------------------------------------------------------
-echo "Create SAT-DNN training and validation pfiles"
-echo ---------------------------------------------------------------------
-# By default, DNN inputs include: spliced 11 frames (+/-5) of fMLLR with 440 dimensions.
-# The i-vectors have the dimension of 100. Thus, the pfile has the dimension of 540.
+echo =====================================================================
+echo "               Training and Cross-Validation Pfiles                "
+echo =====================================================================
 if [ ! -f $working_dir/train.pfile.done ]; then
-  steps_pdnn/build_nnet_pfile_ivec.sh --cmd "$train_cmd" --every-nth-frame 1 --do-split false \
-    --norm-vars false --splice-opts "$splice_opts" --input-dim 540 --is-spk-mode true \
+  steps_pdnn/sat/build_nnet_pfile_ivec.sh --cmd "$train_cmd" --every-nth-frame 1 --do-concat false \
+    --norm-vars $norm_vars --splice-opts "$splice_opts" --add-deltas $add_deltas \
+    --ivec-type speaker \
     $working_dir/data/train ${gmmdir}_ali_100k_nodup $train_ivec $working_dir || exit 1
-  ( cd $working_dir; mv concat.pfile train.pfile; )
   touch $working_dir/train.pfile.done
 fi
 if [ ! -f $working_dir/valid.pfile.done ]; then
-  steps_pdnn/build_nnet_pfile_ivec.sh --cmd "$train_cmd" --every-nth-frame 1 --do-split false \
-    --norm-vars false --splice-opts "$splice_opts" --input-dim 540 --is-spk-mode true \
+  steps_pdnn/build_nnet_pfile_ivec.sh --cmd "$train_cmd" --every-nth-frame 1 --do-concat false \
+    --norm-vars $norm_vars --splice-opts "$splice_opts" --add-deltas $add_deltas \
+    --ivec-type speaker \
     $working_dir/data/valid ${gmmdir}_ali_dev $train_ivec $working_dir || exit 1
-  ( cd $working_dir; mv concat.pfile valid.pfile; )
   touch $working_dir/valid.pfile.done
 fi
 
-echo ---------------------------------------------------------------------
-echo "Start SAT-DNN training"
-echo ---------------------------------------------------------------------
+echo =====================================================================
+echo "                        SAT-DNN Fine-tuning                        "
+echo =====================================================================
 num_pdfs=`gmm-info $gmmdir/final.mdl | grep pdfs | awk '{print $NF}'` || exit 1;
-ivec_dim=`feat-to-dim scp:ivector.scp ark,t:- | head -1 | awk '{print $2}'` || exit 1;
-feat_dim=$(cat $working_dir/train.pfile |head |grep num_features| awk '{print $2}') || exit 1;
+ivec_dim=`feat-to-dim scp:$train_ivec/ivector.scp ark,t:- | head -1 | awk '{print $2}'` || exit 1;
+feat_dim=$(gunzip -c $working_dir/train.pfile.1.gz |head |grep num_features| awk '{print $2}') || exit 1;
 feat_dim=$[$feat_dim-$ivec_dim]
 
+# NOTE: the definition of "--si-nnet-spec" here has to be the same as "--nnet-spec" in run-dnn-fbank.sh
 if [ ! -f $working_dir/sat.fine.done ]; then
   echo "Fine-tuning DNN"
   $cmd $working_dir/log/sat.fine.log \
-    export PYTHONPATH=$PYTHONPATH:`pwd`/ptdnn/ \; \
+    export PYTHONPATH=$PYTHONPATH:`pwd`/pdnn/ \; \
     export THEANO_FLAGS=mode=FAST_RUN,device=$gpu,floatX=float32 \; \
-    $pythonCMD pdnn/run_DNN_SAT.py --train-data "$working_dir/train.pfile,partition=2000m,random=true,stream=true" \
-                          --valid-data "$working_dir/valid.pfile,partition=600m,random=true,stream=true" \
-                          --nnet-spec "$feat_dim:1024:1024:1024:1024:1024:1024:$num_pdfs" \
-                          --ivec-nnet-spec "$ivec_dim:512:512:512:$feat_dim" \
-                          --si-model $initdnn_dir/nnet.finetune.tmp \
-                          --output-format kaldi --lrate "D:0.08:0.5:0.05,0.05:1" \
-                          --wdir $working_dir --output-file $working_dir/dnn.nnet \
-                          --ivec-output-file $working_dir/ivec.nnet || exit 1;
+    $pythonCMD pdnn/run_DNN_SAT.py --train-data "$working_dir/train.pfile.*.gz,partition=2000m,random=true,stream=true" \
+                          --valid-data "$working_dir/valid.pfile.*.gz,partition=600m,random=true,stream=true" \
+                          --si-nnet-spec "$feat_dim:1024:1024:1024:1024:1024:1024:$num_pdfs" \
+                          --adapt-nnet-spec "$ivec_dim:512:512:512" --init-model $initdnn_dir/nnet.param \
+                          --lrate "D:0.08:0.5:0.05,0.05:0" --param-output-file $working_dir/nnet.param \
+                          --wdir $working_dir --kaldi-output-file $working_dir/dnn.nnet || exit 1;
   touch $working_dir/sat.fine.done
 fi
 
-# Remove the last line "<sigmoid> *** ***" of ivec.nnet, because the output layer of iVecNN uses the linear
-# activation function 
-( cd $working_dir; head -n -1 ivec.nnet > ivec.nnet.tmp; mv ivec.nnet.tmp ivec.nnet; )
+# Remove the last line "<sigmoid> *** ***" of dnn.nnet.adapt, because the output layer of the adaptation network
+# uses the linear activation function 
+( cd $working_dir; head -n -1 dnn.nnet.adapt > dnn.nnet.adapt.tmp; mv dnn.nnet.adapt.tmp dnn.nnet.adapt; )
 
-echo ---------------------------------------------------------------------
-echo "Decode the final system"
-echo ---------------------------------------------------------------------
+echo =====================================================================
+echo "                           Decoding                                "
+echo =====================================================================
 if [ ! -f  $working_dir/decode.done ]; then
   cp $gmmdir/final.mdl $working_dir || exit 1;  # copy final.mdl for scoring
   graph_dir=$gmmdir/graph_sw1_tg
-  steps_pdnn/decode_dnn_ivec.sh --nj 24 --scoring-opts "--min-lmwt 8 --max-lmwt 16" --cmd "$decode_cmd" \
-     --norm-vars false --is-spk-mode true \
-     $graph_dir $working_dir/data/eval2000 ${gmmdir}_ali_100k_nodup $decode_ivec $working_dir/decode_eval2000_sw1_tg || exit 1;
+  steps_pdnn/sat/decode_dnn_ivec.sh --nj 24 --scoring-opts "--min-lmwt 8 --max-lmwt 16" --cmd "$decode_cmd" --ivec-type speaker \
+    $graph_dir $working_dir/data/eval2000 ${gmmdir}_ali_100k_nodup $decode_ivec $working_dir/decode_eval2000_sw1_tg || exit 1;
   touch $working_dir/decode.done
-fi
 
 echo "Finish !!"

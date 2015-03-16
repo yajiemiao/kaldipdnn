@@ -6,6 +6,15 @@
 # GMM model. This script requires a GPU, and also the "pdnn" toolkit to train
 # the DNN.
 
+# We implement the <Maxout> activation function, based on Kaldi "revision 4960".
+# Please follow the following steps:
+# 1. Go to /path/to/kaldi/src/nnet and *backup* nnet-component.h, nnet-component.cc, nnet-activation.h
+# 2. Download these 3 files from here:
+#    http://www.cs.cmu.edu/~ymiao/codes/kaldipdnn/nnet-component.h
+#    http://www.cs.cmu.edu/~ymiao/codes/kaldipdnn/nnet-component.cc
+#    http://www.cs.cmu.edu/~ymiao/codes/kaldipdnn/nnet-activation.h
+# 3. Recompile Kaldi
+
 # For more informaiton regarding the recipes and results, visit the webiste
 # http://www.cs.cmu.edu/~ymiao/kaldipdnn
 

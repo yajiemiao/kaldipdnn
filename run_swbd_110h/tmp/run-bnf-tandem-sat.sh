@@ -1,0 +1,207 @@
+#!/bin/bash
+
+# Apache 2.0
+# This script performs SAT for the BNF network and building tandem systems
+# It is to be run after run-bnf-tandem.sh.The input features are fMLLRs 
+
+# Yajie Miao, Hao Zhang, Florian Metze. "Towards Speaker Adaptive Training
+# of Deep Neural Network Acoustic Models". Interspeech 2014.
+
+# You need two additional commands to execute this recipe: get-spkvec-feat
+# and add-feats.Download the following two source files and put them under
+# src/featbin. Then compiling them will give you the required commands.
+
+# http://www.cs.cmu.edu/~ymiao/codes/kaldipdnn/get-spkvec-feat.cc
+# http://www.cs.cmu.edu/~ymiao/codes/kaldipdnn/add-feats.cc
+
+# For more informaiton regarding the recipes and results, visit our webiste
+# http://www.cs.cmu.edu/~ymiao/kaldipdnn
+
+working_dir=exp_pdnn_110h/bnf_tandem_sat
+initdnn_dir=exp_pdnn_110h/bnf_tandem # the directory of the initial DNN model
+
+gmmdir=exp/tri4a # GMM model directory
+
+# I-vectors for the training and decoding speakers. There should be an ivector.scp
+# file in each of both directories.
+train_ivec=exp_ivec/ivectors_swbd1
+decode_ivec=exp_ivec/ivectors_eval2000
+
+# Specify the gpu device to be used
+gpu=gpu
+
+cmd=run.pl
+. cmd.sh
+[ -f path.sh ] && . ./path.sh
+. parse_options.sh || exit 1;
+
+# At this point you may want to make sure the directory $working_dir is
+# somewhere with a lot of space, preferably on the local GPU-containing machine.
+if [ ! -d pdnn ]; then
+  echo "Checking out PDNN code."
+  svn co svn://svn.code.sf.net/p/kaldipdnn/code-0/trunk/pdnn pdnn
+fi
+
+if [ ! -d steps_pdnn ]; then
+  echo "Checking out steps_pdnn scripts."
+  svn co svn://svn.code.sf.net/p/kaldipdnn/code-0/trunk/steps_pdnn steps_pdnn
+fi
+
+if ! nvidia-smi; then
+  echo "The command nvidia-smi was not found: this probably means you don't have a GPU."
+  echo "(Note: this script might still work, it would just be slower.)"
+fi
+
+# The hope here is that Theano has been installed either to python or to python2.6
+pythonCMD=python
+if ! python -c 'import theano;'; then
+  if ! python2.6 -c 'import theano;'; then
+    echo "Theano does not seem to be installed on your machine.  Not continuing."
+    echo "(Note: this script might still work, it would just be slower.)"
+    exit 1;
+  else
+    pythonCMD=python2.6
+  fi
+fi
+
+mkdir -p $working_dir/log
+
+# Check whether i-vectors have been generated
+for f in $train_ivec/ivector.scp $decode_ivec/ivector.scp; do
+  [ ! -f $f ] && echo "Error i-vectors for $f have NOT been extracted. Check/Run run_swbd_110h/run-ivec-extract.sh." && exit 1;
+done
+# Check whether the initial DNN has been trained 
+if [ ! -f $initdnn_dir/nnet.finetune.tmp ]; then
+  echo "Error the initial DNN $initdnn_dir/nnet.finetune.tmp has NOT been trained" && exit 1;
+fi
+
+# Prepare dataset; copy related files from the initial DNN directory
+ln -s $PWD/$initdnn_dir/data $working_dir/data
+cp $initdnn_dir/splice_opts $working_dir
+splice_opts=`cat $working_dir/splice_opts 2>/dev/null` # frame-splicing options.
+
+echo ---------------------------------------------------------------------
+echo "Create SAT-DNN training and validation pfiles"
+echo ---------------------------------------------------------------------
+# By default, BNF inputs include 11 frames (+/-5) of 40-dimensional fMLLRswith 440 dimensions.
+# The i-vectors have the dimension of 100. Thus, the pfile has the dimension of 540.
+if [ ! -f $working_dir/train.pfile.done ]; then
+  steps_pdnn/build_nnet_pfile_ivec.sh --cmd "$train_cmd" --every-nth-frame 1 --do-split false \
+    --norm-vars true --splice-opts "$splice_opts" --input-dim 540 --is-spk-mode true \
+    $working_dir/data/train ${gmmdir}_ali_100k_nodup $train_ivec $working_dir || exit 1
+  ( cd $working_dir; mv concat.pfile train.pfile; )
+  touch $working_dir/train.pfile.done
+fi
+if [ ! -f $working_dir/valid.pfile.done ]; then
+  steps_pdnn/build_nnet_pfile_ivec.sh --cmd "$train_cmd" --every-nth-frame 1 --do-split false \
+    --norm-vars true --splice-opts "$splice_opts" --input-dim 540 --is-spk-mode true \
+    $working_dir/data/valid ${gmmdir}_ali_dev $train_ivec $working_dir || exit 1
+  ( cd $working_dir; mv concat.pfile valid.pfile; )
+  touch $working_dir/valid.pfile.done
+fi
+
+# The script up to now is the same as run-dnn-sat.sh. Pfile generation can be very expensive
+# You may want to reuse Pfiles generated  by run-dnn-sat.sh. Link Pfiles  generated there to
+# $working_dir and also touch $working_dir/{train,valid}.pfile.done
+
+echo ---------------------------------------------------------------------
+echo "Train SAT-BNF network"
+echo ---------------------------------------------------------------------
+num_pdfs=`gmm-info $gmmdir/final.mdl | grep pdfs | awk '{print $NF}'` || exit 1;
+ivec_dim=`feat-to-dim scp:ivector.scp ark,t:- | head -1 | awk '{print $2}'` || exit 1;
+feat_dim=$(cat $working_dir/train.pfile |head |grep num_features| awk '{print $2}') || exit 1;
+feat_dim=$[$feat_dim-$ivec_dim]
+
+if [ ! -f $working_dir/sat.fine.done ]; then
+  echo "Fine-tuning DNN"
+  $cmd $working_dir/log/sat.fine.log \
+    export PYTHONPATH=$PYTHONPATH:`pwd`/ptdnn/ \; \
+    export THEANO_FLAGS=mode=FAST_RUN,device=$gpu,floatX=float32 \; \
+    $pythonCMD pdnn/run_DNN_SAT.py --train-data "$working_dir/train.pfile,partition=2000m,random=true,stream=true" \
+                          --valid-data "$working_dir/valid.pfile,partition=600m,random=true,stream=true" \
+                          --nnet-spec "$feat_dim:1024:1024:1024:1024:42:1024:$num_pdfs" \
+                          --ivec-nnet-spec "$ivec_dim:512:512:512:$feat_dim" \
+                          --si-model $initdnn_dir/nnet.finetune.tmp \
+                          --output-format kaldi --lrate "D:0.08:0.5:0.05,0.05:1" \
+                          --wdir $working_dir --output-file $working_dir/bnf.nnet \
+                          --ivec-output-file $working_dir/ivec.nnet || exit 1;
+  touch $working_dir/sat.fine.done
+fi
+
+# Remove the last line "<sigmoid> *** ***" of ivec.nnet, because the output layer of iVecNN uses the linear
+# activation function 
+( cd $working_dir; head -n -1 ivec.nnet > ivec.nnet.tmp; mv ivec.nnet.tmp ivec.nnet; )
+
+echo ---------------------------------------------------------------------
+echo "Generate bottleneck features"
+echo ---------------------------------------------------------------------
+for set in train; do
+  if [ ! -d $working_dir/data_bnf/${set} ]; then
+    echo "Save BNF features of $set"
+    steps_pdnn/make_bnf_feat_ivec.sh --nj 24 --cmd "$train_cmd" --norm-vars false --is-spk-mode true \
+      $working_dir/data_bnf/${set} $working_dir/data/${set} $working_dir $train_ivec $working_dir/_log $working_dir/_bnf || exit 1
+    # We will normalize BNF features, thus are not providing --fake here. Intuitively, apply CMN over BNF features 
+    # might be redundant. But our experiments on WSJ show gains by doing this.
+    steps/compute_cmvn_stats.sh \
+      $working_dir/data_bnf/${set} $working_dir/_log $working_dir/_bnf || exit 1;
+  fi
+done
+for set in eval2000; do
+  if [ ! -d $working_dir/data_bnf/${set} ]; then
+    echo "Save BNF features of $set"
+    steps_pdnn/make_bnf_feat_ivec.sh --nj 24 --cmd "$train_cmd" --norm-vars false --is-spk-mode true \
+      $working_dir/data_bnf/${set} $working_dir/data/${set} $working_dir $decode_ivec $working_dir/_log $working_dir/_bnf || exit 1
+    # We will normalize BNF features, thus are not providing --fake here. Intuitively, apply CMN over BNF features 
+    # might be redundant. But our experiments on WSJ show gains by doing this.
+    steps/compute_cmvn_stats.sh \
+      $working_dir/data_bnf/${set} $working_dir/_log $working_dir/_bnf || exit 1;
+  fi
+done
+datadir=$working_dir/data_bnf
+
+echo ---------------------------------------------------------------------
+echo "Build LDA+MLLT and MMI systems over bottleneck features"
+echo ---------------------------------------------------------------------
+decode_param="--beam 15.0 --latbeam 7.0 --acwt 0.04" # Note the decoding 
+                                   # parameters differ from MFCC systems
+scoring_opts="--min-lmwt 26 --max-lmwt 34"
+denlats_param="--acwt 0.05"   # Parameters for lattice generation
+
+if [ ! -f $working_dir/lda.mllt.done ]; then
+  echo "Training LDA+MLLT"
+  steps/train_lda_mllt.sh --cmd "$train_cmd" \
+    5500 90000 $datadir/train data/lang ${gmmdir}_ali_100k_nodup $working_dir/tri5a || exit 1;
+
+  echo "Decoding LDA+MLLT"
+  graph_dir=$working_dir/tri5a/graph_sw1_tg
+  $mkgraph_cmd $graph_dir/mkgraph.log \
+    utils/mkgraph.sh data/lang_sw1_tg $working_dir/tri5a $graph_dir || exit 1;
+  steps/decode.sh --nj 24 --cmd "$decode_cmd" $decode_param --scoring-opts "$scoring_opts" \
+      $graph_dir $datadir/eval2000 $working_dir/tri5a/decode_eval2000_sw1_tg || exit 1;
+  touch $working_dir/lda.mllt.done
+fi
+
+if [ ! -f $working_dir/mmi.done ]; then
+  echo "Generating num alignment and den lats"
+  steps/align_si.sh --nj 24 --cmd "$train_cmd" \
+    $datadir/train data/lang ${working_dir}/tri5a ${working_dir}/tri5a_ali || exit 1;
+
+  steps/make_denlats.sh --nj 24 --cmd "$decode_cmd" $denlats_param \
+    $datadir/train data/lang ${working_dir}/tri5a ${working_dir}/tri5a_denlats || exit 1;
+
+  echo "Training bMMI"
+  # 4 iterations of MMI
+  num_mmi_iters=4
+  steps/train_mmi.sh --cmd "$train_cmd" --boost 0.1 --num-iters $num_mmi_iters \
+    $datadir/train data/lang $working_dir/tri5a_{ali,denlats} $working_dir/tri5a_mmi_b0.1 || exit 1;
+
+  for iter in 1 2 3 4; do
+    echo "Decoding bMMI iteration $iter"
+    graph_dir=$working_dir/tri5a/graph_sw1_tg
+    steps/decode.sh --nj 24 --cmd "$decode_cmd" $decode_param --scoring-opts "$scoring_opts" --iter $iter \
+      $graph_dir $datadir/eval2000 ${working_dir}/tri5a_mmi_b0.1/decode_eval2000_sw1_tg_it$iter || exit 1;
+  done
+  touch $working_dir/mmi.done
+fi
+
+echo "Finish !! "
